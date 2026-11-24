@@ -69,24 +69,24 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-sm">
+      <div className="relative w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/80 bg-zinc-900/40">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-zinc-800/80 bg-zinc-900/40">
+          <div className="flex items-center space-x-2.5 min-w-0 flex-1 mr-2">
+            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
               <Shield className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center space-x-2">
-                <h2 className="text-sm font-semibold text-zinc-100">Host Control Room</h2>
+                <h2 className="text-xs sm:text-sm font-semibold text-zinc-100 truncate">Host Control Room</h2>
                 {isSuperAdmin && (
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    OWNER OVERRIDE
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                    OWNER
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-zinc-500">
+              <p className="text-[10px] sm:text-[11px] text-zinc-500 truncate">
                 {isSuperAdmin
                   ? 'Master key active • Immune to host lockouts'
                   : 'Only accessible with the Host Passcode'}
@@ -96,14 +96,14 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
 
           <button
             onClick={handleClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-3.5 sm:space-y-4 overflow-y-auto">
           {/* Shareable Link Banner after Broadcast */}
           {shareableLink && (
             <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2 animate-in fade-in duration-200">
@@ -291,7 +291,7 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
           </div>
 
           {/* Modal Footer Actions */}
-          <div className="pt-4 border-t border-zinc-900 flex items-center justify-between">
+          <div className="pt-3 sm:pt-4 border-t border-zinc-900 flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
               onClick={handleReset}
@@ -301,7 +301,7 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
               <span>Reset Defaults</span>
             </button>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 ml-auto">
               <button
                 type="button"
                 onClick={handleClose}
@@ -312,7 +312,7 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
               <button
                 type="submit"
                 disabled={isSaving}
-                className="px-4 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs rounded-lg transition-colors flex items-center space-x-1.5 disabled:opacity-50"
+                className="px-3.5 sm:px-4 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs rounded-lg transition-colors flex items-center space-x-1.5 disabled:opacity-50"
               >
                 {isSaving ? (
                   <>
@@ -322,7 +322,7 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
                 ) : savedNotice ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Broadcasted to Viewers!</span>
+                    <span>Broadcasted!</span>
                   </>
                 ) : (
                   <span>Broadcast to Viewers</span>

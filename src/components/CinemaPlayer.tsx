@@ -20,7 +20,9 @@ import {
   Layers,
   Sparkles,
   AlertCircle,
-  Shield
+  Shield,
+  Menu,
+  X
 } from 'lucide-react';
 
 interface CinemaPlayerProps {
@@ -46,6 +48,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
   const [hlsError, setHlsError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
   const [hlsStats, setHlsStats] = useState<{ resolution: string; buffer: number } | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Incoming sync message handler (For Viewers)
   const handleReceiveSyncMessage = useCallback((msg: SyncMessage) => {
@@ -392,42 +395,42 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
   return (
     <div className="min-h-screen bg-[#070709] text-zinc-100 flex flex-col justify-between selection:bg-amber-500/20">
       {/* Top Header / Cinema Control Strip */}
-      <header className="border-b border-zinc-900 bg-zinc-950/70 backdrop-blur-md px-4 sm:px-6 py-3 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Stream Identity */}
-          <div className="flex items-center space-x-3">
-            <span className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium bg-red-950/50 text-red-400 border border-red-800/60">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span>LIVE</span>
+      <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+          {/* Stream Identity (Fitted for mobile with smooth truncation) */}
+          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1 mr-1">
+            <span className="flex items-center space-x-1 sm:space-x-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-mono font-medium bg-red-950/50 text-red-400 border border-red-800/60 shrink-0">
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="hidden xs:inline">LIVE</span>
             </span>
 
             {/* Host Badge if Host */}
             {isHost && (
               <span
-                className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-mono font-semibold border shrink-0 ${
                   isSuperAdmin
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/20'
                     : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
                 }`}
               >
-                <Shield className="w-3 h-3" />
-                <span>{isSuperAdmin ? 'OWNER ADMIN' : 'HOST'}</span>
+                <Shield className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                <span>{isSuperAdmin ? 'OWNER' : 'HOST'}</span>
               </span>
             )}
 
-            <div>
-              <h1 className="text-sm font-semibold tracking-wide text-zinc-100 line-clamp-1">
+            <div className="min-w-0">
+              <h1 className="text-xs sm:text-sm font-semibold tracking-wide text-zinc-100 truncate max-w-[130px] xs:max-w-[180px] sm:max-w-[280px] md:max-w-md">
                 {settings.title}
               </h1>
-              <p className="text-[11px] font-mono text-zinc-500 hidden sm:block">
+              <p className="text-[10px] sm:text-[11px] font-mono text-zinc-500 hidden sm:block truncate">
                 Source: <span className="text-zinc-300 font-semibold">{sourceType === 'hls' ? 'HLS Direct Feed' : 'Backup Embed'}</span>
                 {hlsStats?.resolution && sourceType === 'hls' && ` • ${hlsStats.resolution}`}
               </p>
             </div>
           </div>
 
-          {/* Action Bar */}
-          <div className="flex items-center space-x-2">
+          {/* DESKTOP Action Bar (Hidden on mobile) */}
+          <div className="hidden md:flex items-center space-x-2 shrink-0">
             {/* Real-Time WebRTC Sync Indicator */}
             {isHost ? (
               <div
@@ -435,7 +438,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
                 className="inline-flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="hidden sm:inline">P2P Sync:</span>
+                <span className="hidden lg:inline">P2P Sync:</span>
                 <span>{connectedPeersCount} {connectedPeersCount === 1 ? 'Viewer' : 'Viewers'}</span>
               </div>
             ) : (
@@ -452,7 +455,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
                     syncStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'
                   }`}
                 />
-                <span className="hidden sm:inline">Sync:</span>
+                <span className="hidden lg:inline">Sync:</span>
                 <span>{syncStatus === 'connected' ? 'Synced to Host' : 'Connecting...'}</span>
               </div>
             )}
@@ -464,7 +467,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors"
             >
               <Layers className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Feed:</span>
+              <span>Feed:</span>
               <span className="font-mono text-amber-400 uppercase">{sourceType}</span>
             </button>
 
@@ -514,7 +517,138 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
               <LogOut className="w-4 h-4" />
             </button>
           </div>
+
+          {/* MOBILE Compact Action Bar */}
+          <div className="flex md:hidden items-center space-x-1.5 shrink-0">
+            {/* Mobile P2P Sync Pill */}
+            {isHost ? (
+              <div
+                title="P2P Viewers Connected"
+                className="inline-flex items-center space-x-1 px-2 py-1 rounded-lg text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{connectedPeersCount}</span>
+              </div>
+            ) : (
+              <div
+                title={syncStatus === 'connected' ? 'Synced to Host' : 'Connecting to Host...'}
+                className={`inline-flex items-center space-x-1 px-2 py-1 rounded-lg text-[10px] font-mono border ${
+                  syncStatus === 'connected'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    syncStatus === 'connected' ? 'bg-emerald-400' : 'bg-amber-400 animate-ping'
+                  }`}
+                />
+                <span>{syncStatus === 'connected' ? 'Synced' : 'Sync...'}</span>
+              </div>
+            )}
+
+            {/* Mobile Host Quick Settings */}
+            {isHost && (
+              <button
+                onClick={onOpenSettings}
+                title="Host Settings"
+                className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Mobile Hamburger Toggle Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle Navigation Menu"
+              className={`p-1.5 rounded-lg border transition-colors ${
+                isMobileMenuOpen
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white'
+              }`}
+            >
+              {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
+
+        {/* MOBILE SLIDE-DOWN DRAWER MENU */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden mt-3 pt-3 border-t border-zinc-800/80 space-y-2.5 animate-in slide-in-from-top-2 duration-150">
+            {/* Active Feed Switcher in Mobile Drawer */}
+            <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-900/60 border border-zinc-800">
+              <div>
+                <div className="text-xs font-medium text-zinc-200">Video Feed</div>
+                <div className="text-[10px] text-zinc-500">Currently: {sourceType.toUpperCase()}</div>
+              </div>
+              <button
+                onClick={() => {
+                  handleToggleFeed();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center space-x-1.5"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Switch to {sourceType === 'hls' ? 'Embed' : 'HLS'}</span>
+              </button>
+            </div>
+
+            {/* Theater Ambient Glow Toggle */}
+            <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-900/60 border border-zinc-800">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs text-zinc-200">Ambient Glow</span>
+              </div>
+              <button
+                onClick={() => setAmbientGlow(!ambientGlow)}
+                className={`px-3 py-1 rounded-lg text-xs font-mono font-medium border transition-colors ${
+                  ambientGlow
+                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                }`}
+              >
+                {ambientGlow ? 'ON' : 'OFF'}
+              </button>
+            </div>
+
+            {/* Host Control Button if Host */}
+            {isHost && (
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  onOpenSettings();
+                }}
+                className="w-full p-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-xs transition-colors flex items-center justify-center space-x-2"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Open Host Control Room</span>
+              </button>
+            )}
+
+            {/* Discord Link in Mobile Drawer */}
+            {settings.discordUrl && (
+              <a
+                href={settings.discordUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full p-2 rounded-xl bg-[#5865F2]/10 hover:bg-[#5865F2]/20 text-[#7983f5] border border-[#5865F2]/30 text-xs font-medium transition-colors flex items-center justify-center space-x-2"
+              >
+                <span>Join Discord Voice / Chat</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+
+            {/* Exit Room Button */}
+            <button
+              onClick={logout}
+              className="w-full p-2 rounded-xl bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-900/40 text-xs font-medium transition-colors flex items-center justify-center space-x-2"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Exit Watchparty</span>
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Main Theater Floor */}
@@ -705,8 +839,8 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
                     </p>
                   </div>
                   <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-600">
-                    <RotateCw className="w-3 h-3 animate-spin" />
-                    <span>Polling for stream every 7s...</span>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span>Real-time P2P sync active...</span>
                   </div>
                 </div>
               )}
@@ -715,10 +849,10 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
         </div>
 
         {/* Bottom Helper Bar */}
-        <div className="mt-4 w-full flex flex-wrap items-center justify-between text-xs text-zinc-500 px-1 gap-2">
-          <div className="flex items-center space-x-3">
+        <div className="mt-3 sm:mt-4 w-full flex flex-wrap items-center justify-between text-xs text-zinc-500 px-1 gap-2">
+          <div className="flex items-center space-x-2 sm:space-x-3 flex-wrap gap-y-1">
             <span className="font-mono text-[11px]">
-              Active: <span className="text-zinc-300">{sourceType.toUpperCase()}</span>
+              Active: <span className="text-zinc-300 font-semibold">{sourceType.toUpperCase()}</span>
             </span>
             <span className="hidden sm:inline">•</span>
             <span className="hidden sm:inline text-zinc-500">
@@ -742,7 +876,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
             )}
           </div>
 
-          <div className="flex items-center space-x-3 mt-2 sm:mt-0 font-mono text-[11px]">
+          <div className="hidden sm:flex items-center space-x-3 font-mono text-[11px]">
             <span>Hotkeys:</span>
             <span className="text-zinc-400"><kbd className="px-1 py-0.5 bg-zinc-900 border border-zinc-800 rounded">Space</kbd> Play</span>
             <span className="text-zinc-400"><kbd className="px-1 py-0.5 bg-zinc-900 border border-zinc-800 rounded">M</kbd> Mute</span>

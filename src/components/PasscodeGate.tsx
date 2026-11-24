@@ -28,26 +28,26 @@ export const PasscodeGate: React.FC = () => {
 
       <div className={`relative w-full max-w-[420px] ${shake ? 'animate-shake' : ''}`}>
         {/* Screening Card */}
-        <div className="border border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl rounded-2xl p-7 shadow-2xl shadow-black/80">
+        <div className="border border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl rounded-xl sm:rounded-2xl p-5 sm:p-7 shadow-2xl shadow-black/80">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-900 pb-5 mb-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-amber-400">
+          <div className="flex items-center justify-between border-b border-zinc-900 pb-4 sm:pb-5 mb-5 sm:mb-6 gap-2">
+            <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0 flex-1">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-amber-400 shrink-0">
                 <Film className="w-4 h-4" />
               </div>
-              <div>
-                <h1 className="text-sm font-semibold tracking-wide text-zinc-100 uppercase">
+              <div className="min-w-0">
+                <h1 className="text-xs sm:text-sm font-semibold tracking-wide text-zinc-100 uppercase truncate max-w-[140px] xs:max-w-[190px] sm:max-w-none">
                   {settings.title}
                 </h1>
-                <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">
+                <p className="text-[10px] sm:text-[11px] font-mono text-zinc-500 uppercase tracking-wider truncate">
                   Private Screening Room
                 </p>
               </div>
             </div>
 
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-900 text-zinc-400 border border-zinc-800">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
-              PORTAL READY
+              <span className="hidden xs:inline">PORTAL </span>READY
             </span>
           </div>
 
