@@ -45,6 +45,15 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
   const [isConnecting, setIsConnecting] = useState(true);
   const [hlsStats, setHlsStats] = useState<{ resolution: string; buffer: number } | null>(null);
 
+  // Auto-switch to embed view if embedUrl was updated or shared
+  const prevEmbedRef = useRef(settings.embedUrl);
+  useEffect(() => {
+    if (prevEmbedRef.current !== settings.embedUrl && settings.embedUrl) {
+      setSourceType('embed');
+      prevEmbedRef.current = settings.embedUrl;
+    }
+  }, [settings.embedUrl]);
+
   // Setup HLS Stream
   const initHls = useCallback(() => {
     if (sourceType !== 'hls' || !videoRef.current) return;
