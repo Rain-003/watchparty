@@ -1,10 +1,10 @@
-# 📖 Watchparty User Guide (Host & Viewer Manual)
+# Watchparty User Guide (Host & Viewer Manual)
 
 A comprehensive guide on how to join as a viewer, broadcast as a host, and configure streaming sources without showing sensitive passcodes.
 
 ---
 
-## 👥 1. Viewer Guide (How to Watch)
+## 1. Viewer Guide (How to Watch)
 
 ### Joining the Stream:
 1. Open the watchparty website link provided by your host.
@@ -22,7 +22,7 @@ A comprehensive guide on how to join as a viewer, broadcast as a host, and confi
 
 ---
 
-## 🎬 2. Host Guide (Broadcasting & Admin Controls)
+## 2. Host Guide (Broadcasting & Admin Controls)
 
 ### Entering as Host:
 1. Go to the watchparty website.
@@ -40,7 +40,7 @@ Click the **⚙️ (Sliders)** icon in the top right header to open the Host Con
 
 ---
 
-## 📡 3. How to Stream Protected Content (e.g. iWant) via OBS
+## 3. How to Stream Protected Content (e.g. iWant) via OBS
 
 Because services like iWant use DRM encryption and domain restrictions, direct `.m3u8` playback in external browsers is blocked. Restreaming via OBS is the industry-standard way to broadcast:
 

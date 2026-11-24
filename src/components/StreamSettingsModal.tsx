@@ -170,6 +170,14 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
             <p className="mt-1 text-[10px] text-zinc-500">
               Paste any raw YouTube link (e.g. <code>youtube.com/watch?v=...</code> or <code>youtu.be/...</code>) — it converts automatically!
             </p>
+            <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300 space-y-0.5">
+              <p className="font-semibold">⚠️ YouTube Studio Tips to avoid "Sign in" errors for viewers:</p>
+              <ul className="list-disc list-inside text-amber-200/80 space-y-0.5">
+                <li>Set Visibility to <strong>Unlisted</strong> (not Private).</li>
+                <li>Under Audience, ensure <strong>Age restriction is OFF</strong> (Don't restrict to 18+).</li>
+                <li>In Stream settings, ensure <strong>"Allow embedding" is checked</strong>.</li>
+              </ul>
+            </div>
           </div>
 
           {/* Discord URL */}

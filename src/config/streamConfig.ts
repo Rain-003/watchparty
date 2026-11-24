@@ -10,7 +10,7 @@ export const DEFAULT_SETTINGS: StreamSettings = {
   // Default working public test HLS stream
   hlsUrl: import.meta.env.VITE_PRIMARY_HLS_URL || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
   // Fallback YouTube embed
-  embedUrl: import.meta.env.VITE_BACKUP_EMBED_URL || 'https://www.youtube-nocookie.com/embed/jfKfPfyJRdk?autoplay=1&mute=0',
+  embedUrl: import.meta.env.VITE_BACKUP_EMBED_URL || 'https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=0',
   discordUrl: import.meta.env.VITE_DISCORD_URL || 'https://discord.com',
   autoPlay: true,
   ambientGlow: true,

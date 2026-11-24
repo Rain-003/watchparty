@@ -475,8 +475,8 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
         </div>
 
         {/* Bottom Helper Bar */}
-        <div className="mt-4 w-full flex flex-wrap items-center justify-between text-xs text-zinc-500 px-1">
-          <div className="flex items-center space-x-4">
+        <div className="mt-4 w-full flex flex-wrap items-center justify-between text-xs text-zinc-500 px-1 gap-2">
+          <div className="flex items-center space-x-3">
             <span className="font-mono text-[11px]">
               Active: <span className="text-zinc-300">{sourceType.toUpperCase()}</span>
             </span>
@@ -484,6 +484,22 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
             <span className="hidden sm:inline text-zinc-500">
               Chatting in Discord • Fullscreen enabled
             </span>
+            {sourceType === 'embed' && (
+              <a
+                href={
+                  settings.embedUrl.includes('/embed/')
+                    ? settings.embedUrl.replace('/embed/', '/watch?v=').split('?')[0]
+                    : settings.embedUrl
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono text-zinc-400 hover:text-amber-300 bg-zinc-900 border border-zinc-800 hover:border-amber-500/40 transition-colors"
+                title="If YouTube asks to sign in or blocks the embed, click here to watch directly"
+              >
+                <span>Pop-out Stream</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
           </div>
 
           <div className="flex items-center space-x-3 mt-2 sm:mt-0 font-mono text-[11px]">
