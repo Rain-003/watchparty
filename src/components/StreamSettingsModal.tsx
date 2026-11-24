@@ -1,0 +1,235 @@
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { X, Check, RefreshCw, Key, Link2, Tv, MessageSquare, Shield } from 'lucide-react';
+
+interface StreamSettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen, onClose }) => {
+  const { settings, updateSettings, resetSettings } = useAuth();
+
+  const [formData, setFormData] = useState({
+    title: settings.title,
+    viewerPasscode: settings.viewerPasscode,
+    hostPasscode: settings.hostPasscode,
+    hlsUrl: settings.hlsUrl,
+    embedUrl: settings.embedUrl,
+    discordUrl: settings.discordUrl,
+    autoPlay: settings.autoPlay,
+    ambientGlow: settings.ambientGlow,
+  });
+
+  const [savedNotice, setSavedNotice] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateSettings(formData);
+    setSavedNotice(true);
+    setTimeout(() => {
+      setSavedNotice(false);
+      onClose();
+    }, 800);
+  };
+
+  const handleReset = () => {
+    if (window.confirm('Reset all settings to default values?')) {
+      resetSettings();
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="relative w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/80 bg-zinc-900/40">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <Shield className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-100">Host Control Room</h2>
+              <p className="text-[11px] text-zinc-500">Only accessible with the Host Passcode</p>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+          {/* Party Title */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+              Party / Stream Title
+            </label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-amber-500/60"
+            />
+          </div>
+
+          {/* Passcodes Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="flex items-center justify-between text-xs font-medium text-zinc-300 mb-1.5">
+                <span className="flex items-center gap-1">
+                  <Key className="w-3.5 h-3.5 text-zinc-400" />
+                  Viewer Passcode
+                </span>
+              </label>
+              <input
+                type="text"
+                value={formData.viewerPasscode}
+                onChange={(e) => setFormData({ ...formData, viewerPasscode: e.target.value })}
+                placeholder="e.g. watchparty"
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500/60"
+              />
+              <p className="mt-1 text-[10px] text-zinc-500">Give this to guests (No admin controls).</p>
+            </div>
+
+            <div>
+              <label className="flex items-center justify-between text-xs font-medium text-zinc-300 mb-1.5">
+                <span className="flex items-center gap-1">
+                  <Shield className="w-3.5 h-3.5 text-amber-400" />
+                  Host Passcode
+                </span>
+              </label>
+              <input
+                type="text"
+                value={formData.hostPasscode}
+                onChange={(e) => setFormData({ ...formData, hostPasscode: e.target.value })}
+                placeholder="e.g. party-host"
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500/60"
+              />
+              <p className="mt-1 text-[10px] text-amber-400/80">Secret key for you only.</p>
+            </div>
+          </div>
+
+          {/* Direct HLS Stream URL */}
+          <div>
+            <label className="flex items-center justify-between text-xs font-medium text-zinc-300 mb-1.5">
+              <span className="flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5 text-blue-400" />
+                Primary Stream URL (HLS .m3u8)
+              </span>
+              <span className="text-[10px] font-mono text-zinc-500">iWant / OBS / HLS</span>
+            </label>
+            <input
+              type="url"
+              value={formData.hlsUrl}
+              onChange={(e) => setFormData({ ...formData, hlsUrl: e.target.value })}
+              placeholder="https://your-domain.com/live/stream.m3u8"
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500/60"
+            />
+            <p className="mt-1 text-[10px] text-zinc-500">
+              Direct HLS playback via hls.js. Must be an accessible .m3u8 link.
+            </p>
+          </div>
+
+          {/* Fallback Embed URL */}
+          <div>
+            <label className="flex items-center justify-between text-xs font-medium text-zinc-300 mb-1.5">
+              <span className="flex items-center gap-1.5">
+                <Tv className="w-3.5 h-3.5 text-red-400" />
+                Backup Embed URL
+              </span>
+              <span className="text-[10px] font-mono text-zinc-500">YouTube / Twitch</span>
+            </label>
+            <input
+              type="url"
+              value={formData.embedUrl}
+              onChange={(e) => setFormData({ ...formData, embedUrl: e.target.value })}
+              placeholder="https://www.youtube-nocookie.com/embed/..."
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500/60"
+            />
+          </div>
+
+          {/* Discord URL */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-medium text-zinc-300 mb-1.5">
+              <MessageSquare className="w-3.5 h-3.5 text-[#5865F2]" />
+              Discord Chat Link
+            </label>
+            <input
+              type="url"
+              value={formData.discordUrl}
+              onChange={(e) => setFormData({ ...formData, discordUrl: e.target.value })}
+              placeholder="https://discord.gg/your-channel"
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/60"
+            />
+          </div>
+
+          {/* Toggles */}
+          <div className="pt-2 border-t border-zinc-900 space-y-2">
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-xs text-zinc-300">Autoplay when entering room</span>
+              <input
+                type="checkbox"
+                checked={formData.autoPlay}
+                onChange={(e) => setFormData({ ...formData, autoPlay: e.target.checked })}
+                className="rounded bg-zinc-900 border-zinc-700 text-amber-500 focus:ring-0"
+              />
+            </label>
+
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-xs text-zinc-300">Ambient theater glow effect</span>
+              <input
+                type="checkbox"
+                checked={formData.ambientGlow}
+                onChange={(e) => setFormData({ ...formData, ambientGlow: e.target.checked })}
+                className="rounded bg-zinc-900 border-zinc-700 text-amber-500 focus:ring-0"
+              />
+            </label>
+          </div>
+
+          {/* Modal Footer Actions */}
+          <div className="pt-4 border-t border-zinc-900 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="text-[11px] text-zinc-500 hover:text-zinc-300 flex items-center space-x-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Reset Defaults</span>
+            </button>
+
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs rounded-lg transition-colors flex items-center space-x-1.5"
+              >
+                {savedNotice ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Saved!</span>
+                  </>
+                ) : (
+                  <span>Save Configuration</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
