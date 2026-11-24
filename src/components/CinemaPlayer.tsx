@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import { useAuth } from '../context/AuthContext';
-import { StreamSourceType } from '../types';
+import { StreamSourceType, SyncMessage } from '../types';
 import { getStreamFromUrl } from '../utils/urlHelper';
+import { useP2PSync } from '../services/p2pSync';
 import {
   Maximize,
   Minimize,
@@ -27,9 +28,10 @@ interface CinemaPlayerProps {
 }
 
 export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) => {
-  const { settings, logout, isHost, isSuperAdmin } = useAuth();
+  const { settings, updateSettings, logout, isHost, isSuperAdmin } = useAuth();
   
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
 
@@ -45,14 +47,120 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
   const [isConnecting, setIsConnecting] = useState(true);
   const [hlsStats, setHlsStats] = useState<{ resolution: string; buffer: number } | null>(null);
 
-  // Auto-switch to embed view if embedUrl was updated or shared
+  // Incoming sync message handler (For Viewers)
+  const handleReceiveSyncMessage = useCallback((msg: SyncMessage) => {
+    if (isHost) return;
+
+    if (msg.type === 'STATE_SYNC' || msg.type === 'CHANGE_STREAM') {
+      if (msg.sourceType && msg.sourceType !== sourceType) {
+        setSourceType(msg.sourceType);
+      }
+      if (msg.embedUrl && msg.embedUrl !== settings.embedUrl) {
+        updateSettings({
+          embedUrl: msg.embedUrl,
+          title: msg.title || settings.title,
+          hlsUrl: msg.hlsUrl || settings.hlsUrl,
+        });
+      }
+    } else if (msg.type === 'PLAY') {
+      setIsPlaying(true);
+      if (sourceType === 'hls' && videoRef.current) {
+        videoRef.current.play().catch(() => {});
+      } else if (sourceType === 'embed' && iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+          '*'
+        );
+      }
+    } else if (msg.type === 'PAUSE') {
+      setIsPlaying(false);
+      if (sourceType === 'hls' && videoRef.current) {
+        videoRef.current.pause();
+      } else if (sourceType === 'embed' && iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+          '*'
+        );
+      }
+    } else if (msg.type === 'SEEK') {
+      if (typeof msg.currentTime === 'number') {
+        if (sourceType === 'hls' && videoRef.current) {
+          videoRef.current.currentTime = msg.currentTime;
+        } else if (sourceType === 'embed' && iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'seekTo', args: [msg.currentTime, true] }),
+            '*'
+          );
+        }
+      }
+    }
+  }, [isHost, sourceType, settings, updateSettings]);
+
+  // Provide state to newly connected viewers
+  const getLatestState = useCallback(() => {
+    return {
+      embedUrl: settings.embedUrl,
+      hlsUrl: settings.hlsUrl,
+      title: settings.title,
+      sourceType,
+      isPlaying,
+      currentTime: videoRef.current?.currentTime || 0,
+    };
+  }, [settings, sourceType, isPlaying]);
+
+  // Hook up WebRTC Peer-to-Peer Sync
+  const { connectedPeersCount, syncStatus, broadcast } = useP2PSync({
+    isHost,
+    onReceiveMessage: handleReceiveSyncMessage,
+    getLatestState,
+  });
+
+  // Listen for YouTube player state changes from iframe to broadcast (Host)
+  useEffect(() => {
+    const handleWindowMessage = (event: MessageEvent) => {
+      if (typeof event.data !== 'string') return;
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.event === 'onStateChange') {
+          // YouTube: 1 = PLAYING, 2 = PAUSED
+          if (payload.info === 1) {
+            setIsPlaying(true);
+            if (isHost) {
+              broadcast({ type: 'PLAY', currentTime: payload.currentTime });
+            }
+          } else if (payload.info === 2) {
+            setIsPlaying(false);
+            if (isHost) {
+              broadcast({ type: 'PAUSE', currentTime: payload.currentTime });
+            }
+          }
+        }
+      } catch (err) {
+        // Non-JSON iframe messages ignored
+      }
+    };
+
+    window.addEventListener('message', handleWindowMessage);
+    return () => window.removeEventListener('message', handleWindowMessage);
+  }, [isHost, broadcast]);
+
+  // Auto-switch to embed view if embedUrl was updated or shared, and broadcast to viewers
   const prevEmbedRef = useRef(settings.embedUrl);
   useEffect(() => {
     if (prevEmbedRef.current !== settings.embedUrl && settings.embedUrl) {
       setSourceType('embed');
       prevEmbedRef.current = settings.embedUrl;
+      if (isHost) {
+        broadcast({
+          type: 'CHANGE_STREAM',
+          embedUrl: settings.embedUrl,
+          hlsUrl: settings.hlsUrl,
+          title: settings.title,
+          sourceType: 'embed',
+        });
+      }
     }
-  }, [settings.embedUrl]);
+  }, [settings.embedUrl, settings.hlsUrl, settings.title, isHost, broadcast]);
 
   // Setup HLS Stream
   const initHls = useCallback(() => {
@@ -215,11 +323,47 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
   });
 
   const togglePlay = () => {
-    if (!videoRef.current) return;
-    if (videoRef.current.paused) {
-      videoRef.current.play();
-    } else {
-      videoRef.current.pause();
+    if (sourceType === 'hls') {
+      if (!videoRef.current) return;
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        if (isHost) broadcast({ type: 'PLAY', currentTime: videoRef.current.currentTime });
+      } else {
+        videoRef.current.pause();
+        if (isHost) broadcast({ type: 'PAUSE', currentTime: videoRef.current.currentTime });
+      }
+    } else if (sourceType === 'embed') {
+      if (iframeRef.current?.contentWindow) {
+        if (isPlaying) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+            '*'
+          );
+          setIsPlaying(false);
+          if (isHost) broadcast({ type: 'PAUSE' });
+        } else {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+            '*'
+          );
+          setIsPlaying(true);
+          if (isHost) broadcast({ type: 'PLAY' });
+        }
+      }
+    }
+  };
+
+  const handleToggleFeed = () => {
+    const nextType: StreamSourceType = sourceType === 'hls' ? 'embed' : 'hls';
+    setSourceType(nextType);
+    if (isHost) {
+      broadcast({
+        type: 'CHANGE_STREAM',
+        sourceType: nextType,
+        embedUrl: settings.embedUrl,
+        hlsUrl: settings.hlsUrl,
+        title: settings.title,
+      });
     }
   };
 
@@ -284,11 +428,38 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
 
           {/* Action Bar */}
           <div className="flex items-center space-x-2">
+            {/* Real-Time WebRTC Sync Indicator */}
+            {isHost ? (
+              <div
+                title="P2P WebRTC Real-Time Sync Active (Zero Cloud Lag)"
+                className="inline-flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="hidden sm:inline">P2P Sync:</span>
+                <span>{connectedPeersCount} {connectedPeersCount === 1 ? 'Viewer' : 'Viewers'}</span>
+              </div>
+            ) : (
+              <div
+                title={syncStatus === 'connected' ? 'Connected to Host (Real-Time Synced)' : 'Connecting to Host...'}
+                className={`inline-flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono border ${
+                  syncStatus === 'connected'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    syncStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'
+                  }`}
+                />
+                <span className="hidden sm:inline">Sync:</span>
+                <span>{syncStatus === 'connected' ? 'Synced to Host' : 'Connecting...'}</span>
+              </div>
+            )}
+
             {/* Feed Switcher Button */}
             <button
-              onClick={() => {
-                setSourceType(sourceType === 'hls' ? 'embed' : 'hls');
-              }}
+              onClick={handleToggleFeed}
               title="Switch between Direct HLS Feed and Backup Embed"
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors"
             >
@@ -367,6 +538,23 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
                 className="w-full h-full object-contain cursor-pointer"
                 playsInline
                 onClick={togglePlay}
+                onPlay={() => {
+                  setIsPlaying(true);
+                  if (isHost && videoRef.current) {
+                    broadcast({ type: 'PLAY', currentTime: videoRef.current.currentTime });
+                  }
+                }}
+                onPause={() => {
+                  setIsPlaying(false);
+                  if (isHost && videoRef.current) {
+                    broadcast({ type: 'PAUSE', currentTime: videoRef.current.currentTime });
+                  }
+                }}
+                onSeeked={() => {
+                  if (isHost && videoRef.current) {
+                    broadcast({ type: 'SEEK', currentTime: videoRef.current.currentTime });
+                  }
+                }}
               />
 
               {/* Connecting State */}
@@ -483,12 +671,21 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
             <div className="w-full h-full relative">
               {settings.embedUrl ? (
                 <iframe
+                  ref={iframeRef}
                   key={settings.embedUrl}
                   src={settings.embedUrl}
                   title="Backup Livestream Embed"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                   className="w-full h-full border-0"
+                  onLoad={() => {
+                    try {
+                      iframeRef.current?.contentWindow?.postMessage(
+                        JSON.stringify({ event: 'listening', id: 'watchparty-player' }),
+                        '*'
+                      );
+                    } catch (e) {}
+                  }}
                 />
               ) : (
                 /* Waiting for host to set stream */

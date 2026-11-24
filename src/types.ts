@@ -12,3 +12,16 @@ export interface StreamSettings {
   autoPlay: boolean;
   ambientGlow: boolean;
 }
+
+export type SyncActionType = 'STATE_SYNC' | 'PLAY' | 'PAUSE' | 'SEEK' | 'CHANGE_STREAM';
+
+export interface SyncMessage {
+  type: SyncActionType;
+  embedUrl?: string;
+  hlsUrl?: string;
+  title?: string;
+  sourceType?: StreamSourceType;
+  currentTime?: number;
+  isPlaying?: boolean;
+  timestamp: number;
+}
