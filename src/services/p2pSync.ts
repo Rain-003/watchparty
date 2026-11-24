@@ -24,6 +24,18 @@ export interface UseP2PSyncReturn {
 
 const DEFAULT_ROOM_ID = 'rain-screening-room';
 
+const resolveRoomId = (customRoom?: string): string => {
+  if (customRoom && customRoom !== DEFAULT_ROOM_ID) return customRoom;
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const queryRoom = params.get('room');
+    if (queryRoom) return queryRoom;
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    return isLocal ? 'rain-room-local' : 'rain-room-live';
+  }
+  return 'rain-room-live';
+};
+
 export function useP2PSync({
   isHost,
   roomId = DEFAULT_ROOM_ID,
@@ -64,76 +76,98 @@ export function useP2PSync({
   }, [isHost]);
 
   useEffect(() => {
-    const hostPeerId = `watchparty-${roomId}-host`;
+    const effectiveRoom = resolveRoomId(roomId);
+    const hostPeerId = `watchparty-${effectiveRoom}-host`;
     let isMounted = true;
+
+    // Clean up cleanly on window close/refresh to release peer ID instantly
+    const handleBeforeUnload = () => {
+      if (peerRef.current) {
+        peerRef.current.destroy();
+        peerRef.current = null;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     if (isHost) {
       // HOST MODE: Initialize host peer
-      const peer = new Peer(hostPeerId, {
-        debug: 1,
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' },
-          ],
-        },
-      });
-      peerRef.current = peer;
-
-      peer.on('open', () => {
+      const initHost = () => {
         if (!isMounted) return;
-        setSyncStatus('connected');
-      });
+        if (peerRef.current) {
+          peerRef.current.destroy();
+          peerRef.current = null;
+        }
 
-      peer.on('connection', (conn) => {
-        conn.on('open', () => {
+        const peer = new Peer(hostPeerId, {
+          debug: 1,
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:global.stun.twilio.com:3478' },
+            ],
+          },
+        });
+        peerRef.current = peer;
+
+        peer.on('open', () => {
           if (!isMounted) return;
-          connectionsRef.current.set(conn.peer, conn);
-          setConnectedPeersCount(connectionsRef.current.size);
+          setSyncStatus('connected');
+        });
 
-          // Instantly send current playback and stream state to new viewer
-          if (getLatestStateRef.current) {
-            const state = getLatestStateRef.current();
-            conn.send({
-              type: 'STATE_SYNC',
-              embedUrl: state.embedUrl,
-              hlsUrl: state.hlsUrl,
-              title: state.title,
-              sourceType: state.sourceType,
-              isPlaying: state.isPlaying,
-              currentTime: state.currentTime,
-              timestamp: Date.now(),
-            } as SyncMessage);
+        peer.on('connection', (conn) => {
+          conn.on('open', () => {
+            if (!isMounted) return;
+            connectionsRef.current.set(conn.peer, conn);
+            setConnectedPeersCount(connectionsRef.current.size);
+
+            // Instantly send current playback and stream state to new viewer
+            if (getLatestStateRef.current) {
+              const state = getLatestStateRef.current();
+              conn.send({
+                type: 'STATE_SYNC',
+                embedUrl: state.embedUrl,
+                hlsUrl: state.hlsUrl,
+                title: state.title,
+                sourceType: state.sourceType,
+                isPlaying: state.isPlaying,
+                currentTime: state.currentTime,
+                timestamp: Date.now(),
+              } as SyncMessage);
+            }
+          });
+
+          conn.on('close', () => {
+            connectionsRef.current.delete(conn.peer);
+            if (isMounted) setConnectedPeersCount(connectionsRef.current.size);
+          });
+
+          conn.on('error', () => {
+            connectionsRef.current.delete(conn.peer);
+            if (isMounted) setConnectedPeersCount(connectionsRef.current.size);
+          });
+        });
+
+        peer.on('error', (err) => {
+          if (!isMounted) return;
+          console.warn('[P2P Host Error]', err.type, err.message);
+          if (err.type === 'unavailable-id') {
+            // ID occupied by an old socket; wait 2s and re-init
+            if (peerRef.current) {
+              peerRef.current.destroy();
+              peerRef.current = null;
+            }
+            setTimeout(() => {
+              if (isMounted) initHost();
+            }, 2500);
           }
         });
+      };
 
-        conn.on('close', () => {
-          connectionsRef.current.delete(conn.peer);
-          if (isMounted) setConnectedPeersCount(connectionsRef.current.size);
-        });
-
-        conn.on('error', () => {
-          connectionsRef.current.delete(conn.peer);
-          if (isMounted) setConnectedPeersCount(connectionsRef.current.size);
-        });
-      });
-
-      peer.on('error', (err) => {
-        if (!isMounted) return;
-        console.warn('[P2P Host Error]', err.type, err.message);
-        if (err.type === 'unavailable-id') {
-          // If ID is occupied (e.g. from rapid page refresh), retry shortly
-          setTimeout(() => {
-            if (isMounted && peerRef.current?.destroyed) {
-              peer.reconnect();
-            }
-          }, 3000);
-        }
-      });
+      initHost();
 
     } else {
       // VIEWER MODE: Connect to host
-      const viewerPeerId = `watchparty-${roomId}-v-${Math.random().toString(36).substring(2, 8)}`;
+      const viewerPeerId = `watchparty-${effectiveRoom}-v-${Math.random().toString(36).substring(2, 8)}`;
       const peer = new Peer(viewerPeerId, {
         debug: 1,
         config: {
@@ -194,7 +228,7 @@ export function useP2PSync({
             if (!hostConnRef.current || !hostConnRef.current.open) {
               connectToHost();
             }
-          }, 5000);
+          }, 3500);
         }
       };
 
@@ -207,8 +241,8 @@ export function useP2PSync({
         if (!isMounted) return;
         console.warn('[P2P Viewer Error]', err.type, err.message);
         if (err.type === 'peer-unavailable') {
-          // Host is not online yet; keep polling
-          setSyncStatus('disconnected');
+          // Host not registered on signaling server yet; keep polling
+          setSyncStatus('connecting');
           scheduleReconnect();
         }
       });
@@ -216,6 +250,7 @@ export function useP2PSync({
 
     return () => {
       isMounted = false;
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       if (reconnectTimerRef.current) {
         clearInterval(reconnectTimerRef.current);
         reconnectTimerRef.current = null;

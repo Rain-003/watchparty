@@ -66,6 +66,21 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
           hlsUrl: msg.hlsUrl || settings.hlsUrl,
         });
       }
+      // Sync viewer timestamp to host's position on initial join
+      if (typeof msg.currentTime === 'number' && msg.currentTime > 0) {
+        const targetTime = msg.currentTime;
+        setTimeout(() => {
+          if (iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage(
+              JSON.stringify({ event: 'command', func: 'seekTo', args: [targetTime, true] }),
+              '*'
+            );
+          }
+          if (videoRef.current) {
+            videoRef.current.currentTime = targetTime;
+          }
+        }, 1200);
+      }
     } else if (msg.type === 'PLAY') {
       setIsPlaying(true);
       if (sourceType === 'hls' && videoRef.current) {
@@ -416,12 +431,8 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
     const left = Math.max(0, window.screen.width - width - 30);
     const top = Math.max(0, window.screen.height - height - 80);
 
-    const urlToOpen =
-      sourceType === 'embed'
-        ? settings.embedUrl.includes('/embed/')
-          ? settings.embedUrl.replace('/embed/', '/watch?v=').split('?')[0]
-          : settings.embedUrl
-        : settings.hlsUrl;
+    // Open clean video embed player in borderless floating popup window
+    const urlToOpen = sourceType === 'embed' ? settings.embedUrl : settings.hlsUrl;
 
     if (!urlToOpen) return;
 
