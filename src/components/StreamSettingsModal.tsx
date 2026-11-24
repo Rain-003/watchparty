@@ -23,16 +23,19 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
   });
 
   const [savedNotice, setSavedNotice] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
     const formattedData = {
       ...formData,
       embedUrl: formatEmbedUrl(formData.embedUrl),
     };
-    updateSettings(formattedData);
+    await updateSettings(formattedData);
+    setIsSaving(false);
     setSavedNotice(true);
     setTimeout(() => {
       setSavedNotice(false);
@@ -250,15 +253,21 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs rounded-lg transition-colors flex items-center space-x-1.5"
+                disabled={isSaving}
+                className="px-4 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs rounded-lg transition-colors flex items-center space-x-1.5 disabled:opacity-50"
               >
-                {savedNotice ? (
+                {isSaving ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-zinc-700" />
+                    <span>Broadcasting...</span>
+                  </>
+                ) : savedNotice ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Saved!</span>
+                    <span>Broadcasted to Viewers!</span>
                   </>
                 ) : (
-                  <span>Save Configuration</span>
+                  <span>Broadcast to Viewers</span>
                 )}
               </button>
             </div>

@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_STREAM_TITLE?: string;
+  readonly VITE_ROOM_ID?: string;
   readonly VITE_VIEWER_PASSCODE?: string;
   readonly VITE_HOST_PASSCODE?: string;
   readonly VITE_MASTER_PASSCODE?: string;
