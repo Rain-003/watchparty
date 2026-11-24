@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { X, Check, RefreshCw, Key, Link2, Tv, MessageSquare, Shield, Wand2 } from 'lucide-react';
-import { formatEmbedUrl } from '../utils/urlHelper';
+import { X, Check, RefreshCw, Key, Link2, Tv, MessageSquare, Shield, Wand2, Copy, Share2 } from 'lucide-react';
+import { formatEmbedUrl, buildShareableLink } from '../utils/urlHelper';
 
 interface StreamSettingsModalProps {
   isOpen: boolean;
@@ -24,6 +24,8 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
 
   const [savedNotice, setSavedNotice] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [shareableLink, setShareableLink] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   if (!isOpen) return null;
 
@@ -35,12 +37,28 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
       embedUrl: formatEmbedUrl(formData.embedUrl),
     };
     await updateSettings(formattedData);
+
+    // Generate the shareable viewer link
+    const link = buildShareableLink(formattedData.embedUrl);
+    setShareableLink(link);
+
     setIsSaving(false);
     setSavedNotice(true);
-    setTimeout(() => {
-      setSavedNotice(false);
-      onClose();
-    }, 800);
+  };
+
+  const handleCopyLink = () => {
+    if (!shareableLink) return;
+    navigator.clipboard.writeText(shareableLink).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  };
+
+  const handleClose = () => {
+    setShareableLink(null);
+    setSavedNotice(false);
+    setLinkCopied(false);
+    onClose();
   };
 
   const handleReset = () => {
@@ -77,7 +95,7 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -86,6 +104,46 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
 
         {/* Modal Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+          {/* Shareable Link Banner after Broadcast */}
+          {shareableLink && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                  <Share2 className="w-3.5 h-3.5" />
+                  Viewer Sync Link
+                </span>
+                <span className="text-[10px] text-amber-400/80">Auto-loads this video!</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={shareableLink}
+                  className="w-full px-2.5 py-1.5 bg-black/60 border border-amber-500/30 rounded-lg text-xs font-mono text-amber-200 select-all focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-xs rounded-lg transition-colors flex items-center space-x-1 shrink-0"
+                >
+                  {linkCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-[10px] text-zinc-400">
+                Share this in your Discord channel. Viewers clicking this link will immediately sync to this video across all browsers!
+              </p>
+            </div>
+          )}
           {/* Party Title */}
           <div>
             <label className="block text-xs font-medium text-zinc-300 mb-1.5">
@@ -246,7 +304,7 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
             <div className="flex items-center space-x-2">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 rounded-lg"
               >
                 Cancel

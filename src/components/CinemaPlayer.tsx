@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import { useAuth } from '../context/AuthContext';
 import { StreamSourceType } from '../types';
+import { getStreamFromUrl } from '../utils/urlHelper';
 import {
   Maximize,
   Minimize,
@@ -32,7 +33,9 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
 
-  const [sourceType, setSourceType] = useState<StreamSourceType>('hls');
+  const [sourceType, setSourceType] = useState<StreamSourceType>(() => {
+    return getStreamFromUrl() ? 'embed' : 'hls';
+  });
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);

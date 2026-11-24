@@ -35,8 +35,9 @@ Click the **⚙️ (Sliders)** icon in the top right header to open the Host Con
 * **Update Passcodes:** Change both the Viewer Passcode and Host Passcode anytime.
 * **Primary Stream URL (HLS):** Paste any direct `.m3u8` stream link.
 * **Backup Embed URL (Auto-Formatted):** Paste **any regular YouTube link** (e.g. `https://www.youtube.com/watch?v=...`, `youtu.be/...`, or `youtube.com/live/...`) or Twitch channel link. The system automatically converts it into a working embed with autoplay enabled.
+* **Broadcast to Viewers:** Click **"Broadcast to Viewers"** to save your stream. A **Viewer Sync Link** (e.g. `https://watchparty-vert.vercel.app?v=...`) is generated.
+* **Copy & Share:** Click **Copy** and paste the link into Discord. Viewers who click this link will automatically sync to your selected stream across any device or browser without touching any settings!
 * **Discord URL:** Update your community Discord invite link.
-* Click **Save Configuration** to apply changes instantly.
 
 ---
 

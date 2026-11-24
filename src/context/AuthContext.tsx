@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   STORAGE_KEY_AUTH_ROLE,
   getStoredSettings,
@@ -7,7 +7,7 @@ import {
   MASTER_ADMIN_PASSCODE,
 } from '../config/streamConfig';
 import { StreamSettings, UserRole } from '../types';
-import { fetchStreamFromCloud, pushStreamToCloud } from '../services/cloudSync';
+import { getStreamFromUrl } from '../utils/urlHelper';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -28,11 +28,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
-  const [settings, setSettings] = useState<StreamSettings>(getStoredSettings());
-  const isHostRef = useRef(false);
-  isHostRef.current = userRole === 'host';
 
-  // 1. Initial auth restoration
+  const [settings, setSettings] = useState<StreamSettings>(() => {
+    const base = getStoredSettings();
+    // Priority 1: If a stream URL is encoded in the page URL (?v=... or ?stream=...)
+    // This allows the host to share a direct link that overrides stored settings
+    const urlStream = getStreamFromUrl();
+    if (urlStream) {
+      return { ...base, embedUrl: urlStream };
+    }
+    return base;
+  });
+
+  // Restore session on mount
   useEffect(() => {
     const savedRole = localStorage.getItem(STORAGE_KEY_AUTH_ROLE) as UserRole | null;
     const isSuper = localStorage.getItem(STORAGE_KEY_SUPER) === 'true';
@@ -42,51 +50,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // 2. Real-time Cloud Sync: Fetch active stream from the host
-  const syncFromCloud = useCallback(async () => {
-    const remote = await fetchStreamFromCloud();
-    if (remote) {
-      setSettings((prev) => {
-        // Only update if something actually changed to prevent video reload loops
-        if (
-          remote.embedUrl && remote.embedUrl !== prev.embedUrl ||
-          remote.hlsUrl && remote.hlsUrl !== prev.hlsUrl ||
-          remote.title && remote.title !== prev.title
-        ) {
-          const merged = { ...prev, ...remote };
-          saveStoredSettings(merged);
-          return merged;
-        }
-        return prev;
-      });
-    }
-  }, []);
-
-  // Initial cloud fetch on mount
-  useEffect(() => {
-    syncFromCloud();
-  }, [syncFromCloud]);
-
-  // Periodic polling for viewers so they follow the host in real time
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Both viewers and hosts check cloud, but viewers rely on it
-      syncFromCloud();
-    }, 7000);
-
-    const onFocus = () => syncFromCloud();
-    window.addEventListener('focus', onFocus);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [syncFromCloud]);
-
   const login = (code: string): { success: boolean; role?: UserRole } => {
     const trimmed = code.trim();
 
-    // 1. IMMUTABLE MASTER ADMIN OVERRIDE
+    // 1. Immutable master owner key
     if (trimmed === MASTER_ADMIN_PASSCODE) {
       localStorage.setItem(STORAGE_KEY_AUTH_ROLE, 'host');
       localStorage.setItem(STORAGE_KEY_SUPER, 'true');
@@ -95,7 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true, role: 'host' };
     }
 
-    // 2. Regular Host Passcode
+    // 2. Regular host
     if (trimmed === settings.hostPasscode) {
       localStorage.setItem(STORAGE_KEY_AUTH_ROLE, 'host');
       localStorage.removeItem(STORAGE_KEY_SUPER);
@@ -104,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true, role: 'host' };
     }
 
-    // 3. Regular Viewer Passcode
+    // 3. Viewer
     if (trimmed === settings.viewerPasscode) {
       localStorage.setItem(STORAGE_KEY_AUTH_ROLE, 'viewer');
       localStorage.removeItem(STORAGE_KEY_SUPER);
@@ -127,15 +94,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
     saveStoredSettings(updated);
-
-    // Broadcast to the cloud room so ALL viewers immediately update
-    await pushStreamToCloud(updated);
   };
 
   const resetSettings = () => {
     setSettings(DEFAULT_SETTINGS);
     saveStoredSettings(DEFAULT_SETTINGS);
-    pushStreamToCloud(DEFAULT_SETTINGS);
   };
 
   return (
