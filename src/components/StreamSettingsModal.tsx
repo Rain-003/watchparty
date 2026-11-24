@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { X, Check, RefreshCw, Key, Link2, Tv, MessageSquare, Shield } from 'lucide-react';
+import { X, Check, RefreshCw, Key, Link2, Tv, MessageSquare, Shield, Wand2 } from 'lucide-react';
+import { formatEmbedUrl } from '../utils/urlHelper';
 
 interface StreamSettingsModalProps {
   isOpen: boolean;
@@ -27,7 +28,11 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateSettings(formData);
+    const formattedData = {
+      ...formData,
+      embedUrl: formatEmbedUrl(formData.embedUrl),
+    };
+    updateSettings(formattedData);
     setSavedNotice(true);
     setTimeout(() => {
       setSavedNotice(false);
@@ -145,15 +150,26 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
                 <Tv className="w-3.5 h-3.5 text-red-400" />
                 Backup Embed URL
               </span>
-              <span className="text-[10px] font-mono text-zinc-500">YouTube / Twitch</span>
+              <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                <Wand2 className="w-3 h-3" />
+                Auto-formats YouTube & Twitch links
+              </span>
             </label>
             <input
-              type="url"
+              type="text"
               value={formData.embedUrl}
               onChange={(e) => setFormData({ ...formData, embedUrl: e.target.value })}
-              placeholder="https://www.youtube-nocookie.com/embed/..."
+              onBlur={() => {
+                if (formData.embedUrl) {
+                  setFormData((prev) => ({ ...prev, embedUrl: formatEmbedUrl(prev.embedUrl) }));
+                }
+              }}
+              placeholder="Paste regular YouTube (watch?v=...), live link, or Twitch URL"
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500/60"
             />
+            <p className="mt-1 text-[10px] text-zinc-500">
+              Paste any raw YouTube link (e.g. <code>youtube.com/watch?v=...</code> or <code>youtu.be/...</code>) — it converts automatically!
+            </p>
           </div>
 
           {/* Discord URL */}
