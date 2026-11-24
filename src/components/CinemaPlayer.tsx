@@ -469,13 +469,38 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
           ) : (
             /* Backup YouTube / Twitch / Video Embed */
             <div className="w-full h-full relative">
-              <iframe
-                src={settings.embedUrl}
-                title="Backup Livestream Embed"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                className="w-full h-full border-0"
-              />
+              {settings.embedUrl ? (
+                <iframe
+                  key={settings.embedUrl}
+                  src={settings.embedUrl}
+                  title="Backup Livestream Embed"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  className="w-full h-full border-0"
+                />
+              ) : (
+                /* Waiting for host to set stream */
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center p-6">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-amber-400">
+                      <Radio className="w-7 h-7" />
+                    </div>
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border-2 border-zinc-950 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-zinc-100 mb-1">
+                      Stream Starting Soon
+                    </h3>
+                    <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
+                      Waiting for the host to load a stream. This screen will update automatically — no need to refresh.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-600">
+                    <RotateCw className="w-3 h-3 animate-spin" />
+                    <span>Polling for stream every 7s...</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
