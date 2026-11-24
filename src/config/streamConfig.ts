@@ -3,6 +3,9 @@ import { StreamSettings } from '../types';
 export const STORAGE_KEY_AUTH_ROLE = 'watchparty_auth_role';
 export const STORAGE_KEY_SETTINGS = 'watchparty_custom_settings';
 
+// Immutable owner master key that cannot be changed by the host in UI
+export const MASTER_ADMIN_PASSCODE = import.meta.env.VITE_MASTER_PASSCODE || 'wRain1234';
+
 export const DEFAULT_SETTINGS: StreamSettings = {
   title: import.meta.env.VITE_STREAM_TITLE || 'Community Watchparty',
   viewerPasscode: import.meta.env.VITE_VIEWER_PASSCODE || 'watchparty',

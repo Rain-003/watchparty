@@ -9,7 +9,7 @@ interface StreamSettingsModalProps {
 }
 
 export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen, onClose }) => {
-  const { settings, updateSettings, resetSettings } = useAuth();
+  const { settings, updateSettings, resetSettings, isSuperAdmin } = useAuth();
 
   const [formData, setFormData] = useState({
     title: settings.title,
@@ -57,8 +57,19 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
               <Shield className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-zinc-100">Host Control Room</h2>
-              <p className="text-[11px] text-zinc-500">Only accessible with the Host Passcode</p>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-sm font-semibold text-zinc-100">Host Control Room</h2>
+                {isSuperAdmin && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    OWNER OVERRIDE
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-500">
+                {isSuperAdmin
+                  ? 'Master key active • Immune to host lockouts'
+                  : 'Only accessible with the Host Passcode'}
+              </p>
             </div>
           </div>
 

@@ -26,7 +26,7 @@ interface CinemaPlayerProps {
 }
 
 export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) => {
-  const { settings, logout, isHost } = useAuth();
+  const { settings, logout, isHost, isSuperAdmin } = useAuth();
   
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -247,9 +247,15 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
 
             {/* Host Badge if Host */}
             {isHost && (
-              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              <span
+                className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                  isSuperAdmin
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                }`}
+              >
                 <Shield className="w-3 h-3" />
-                <span>HOST</span>
+                <span>{isSuperAdmin ? 'OWNER ADMIN' : 'HOST'}</span>
               </span>
             )}
 
