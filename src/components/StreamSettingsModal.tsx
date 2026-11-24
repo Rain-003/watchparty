@@ -119,6 +119,8 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
                   type="text"
                   readOnly
                   value={shareableLink}
+                  onFocus={(e) => e.target.select()}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
                   className="w-full px-2.5 py-1.5 bg-black/60 border border-amber-500/30 rounded-lg text-xs font-mono text-amber-200 select-all focus:outline-none"
                 />
                 <button
@@ -152,6 +154,8 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
             <input
               type="text"
               value={formData.title}
+              onFocus={(e) => e.target.select()}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-amber-500/60"
             />
@@ -169,6 +173,8 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
               <input
                 type="text"
                 value={formData.viewerPasscode}
+                onFocus={(e) => e.target.select()}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
                 onChange={(e) => setFormData({ ...formData, viewerPasscode: e.target.value })}
                 placeholder="e.g. watchparty"
                 className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500/60"
@@ -186,6 +192,8 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
               <input
                 type="text"
                 value={formData.hostPasscode}
+                onFocus={(e) => e.target.select()}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
                 onChange={(e) => setFormData({ ...formData, hostPasscode: e.target.value })}
                 placeholder="e.g. party-host"
                 className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500/60"
@@ -206,6 +214,8 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
             <input
               type="url"
               value={formData.hlsUrl}
+              onFocus={(e) => e.target.select()}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
               onChange={(e) => setFormData({ ...formData, hlsUrl: e.target.value })}
               placeholder="https://your-domain.com/live/stream.m3u8"
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500/60"
@@ -230,6 +240,8 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
             <input
               type="text"
               value={formData.embedUrl}
+              onFocus={(e) => e.target.select()}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
               onChange={(e) => setFormData({ ...formData, embedUrl: e.target.value })}
               onBlur={() => {
                 if (formData.embedUrl) {
@@ -261,6 +273,8 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
             <input
               type="url"
               value={formData.discordUrl}
+              onFocus={(e) => e.target.select()}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
               onChange={(e) => setFormData({ ...formData, discordUrl: e.target.value })}
               placeholder="https://discord.gg/your-channel"
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/60"

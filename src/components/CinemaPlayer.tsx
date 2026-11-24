@@ -22,7 +22,8 @@ import {
   AlertCircle,
   Shield,
   Menu,
-  X
+  X,
+  PictureInPicture2
 } from 'lucide-react';
 
 interface CinemaPlayerProps {
@@ -392,6 +393,45 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
     }
   };
 
+  const handleOpenFloatingPlayer = () => {
+    if (sourceType === 'hls' && videoRef.current && document.pictureInPictureEnabled) {
+      if (document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+        return;
+      }
+      videoRef.current
+        .requestPictureInPicture()
+        .catch(() => {
+          openFloatingPopup();
+        });
+      return;
+    }
+
+    openFloatingPopup();
+  };
+
+  const openFloatingPopup = () => {
+    const width = 854;
+    const height = 480;
+    const left = Math.max(0, window.screen.width - width - 30);
+    const top = Math.max(0, window.screen.height - height - 80);
+
+    const urlToOpen =
+      sourceType === 'embed'
+        ? settings.embedUrl.includes('/embed/')
+          ? settings.embedUrl.replace('/embed/', '/watch?v=').split('?')[0]
+          : settings.embedUrl
+        : settings.hlsUrl;
+
+    if (!urlToOpen) return;
+
+    window.open(
+      urlToOpen,
+      'WatchPartyFloatingPlayer',
+      `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#070709] text-zinc-100 flex flex-col justify-between selection:bg-amber-500/20">
       {/* Top Header / Cinema Control Strip */}
@@ -639,6 +679,18 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
               </a>
             )}
 
+            {/* Floating Screen in Mobile Drawer */}
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                handleOpenFloatingPlayer();
+              }}
+              className="w-full p-2 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-medium transition-colors flex items-center justify-center space-x-2"
+            >
+              <PictureInPicture2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Floating Screen (Pop-out Window)</span>
+            </button>
+
             {/* Exit Room Button */}
             <button
               onClick={logout}
@@ -788,6 +840,13 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
                     Press <kbd className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-400">F</kbd> for Fullscreen
                   </span>
                   <button
+                    onClick={handleOpenFloatingPlayer}
+                    title="Floating Mini-Player (Picture-in-Picture)"
+                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                  >
+                    <PictureInPicture2 className="w-4 h-4 text-amber-300" />
+                  </button>
+                  <button
                     onClick={toggleFullscreen}
                     className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
                   >
@@ -858,6 +917,17 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
             <span className="hidden sm:inline text-zinc-500">
               Chatting in Discord • Fullscreen enabled
             </span>
+            {/* Floating Mini-Player Button */}
+            <button
+              type="button"
+              onClick={handleOpenFloatingPlayer}
+              className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-zinc-300 hover:text-amber-300 bg-zinc-900 border border-zinc-800 hover:border-amber-500/40 transition-colors"
+              title="Pop out into a floating Picture-in-Picture window"
+            >
+              <PictureInPicture2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Floating Screen</span>
+            </button>
+
             {sourceType === 'embed' && (
               <a
                 href={
@@ -867,10 +937,10 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
                 }
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono text-zinc-400 hover:text-amber-300 bg-zinc-900 border border-zinc-800 hover:border-amber-500/40 transition-colors"
-                title="If YouTube asks to sign in or blocks the embed, click here to watch directly"
+                className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono text-zinc-400 hover:text-amber-300 bg-zinc-900/60 border border-zinc-800 hover:border-amber-500/40 transition-colors"
+                title="If YouTube blocks embedding or asks to sign in, watch directly on YouTube"
               >
-                <span>Pop-out Stream</span>
+                <span>YouTube</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
             )}
