@@ -43,6 +43,8 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const isExplicitlyPausedRef = useRef<boolean>(false);
+  const hostCurrentTimeRef = useRef<number>(0);
+  const viewerCurrentTimeRef = useRef<number>(0);
 
   const [sourceType, setSourceType] = useState<StreamSourceType>(() => {
     return getStreamFromUrl() ? 'embed' : 'hls';
@@ -125,6 +127,29 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
             JSON.stringify({ event: 'command', func: 'seekTo', args: [msg.currentTime, true] }),
             '*'
           );
+        }
+      }
+    } else if (msg.type === 'TIME_SYNC') {
+      if (typeof msg.currentTime === 'number' && msg.currentTime > 0) {
+        const hostTime = msg.currentTime;
+        if (sourceType === 'embed') {
+          const viewerTime = viewerCurrentTimeRef.current;
+          // If viewer lagged behind by more than 2.5 seconds (e.g. viewer tabbed out or switched apps):
+          if (viewerTime === 0 || Math.abs(viewerTime - hostTime) > 2.5) {
+            viewerCurrentTimeRef.current = hostTime;
+            iframeRef.current?.contentWindow?.postMessage(
+              JSON.stringify({ event: 'command', func: 'seekTo', args: [hostTime, true] }),
+              '*'
+            );
+            iframeRef.current?.contentWindow?.postMessage(
+              JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+              '*'
+            );
+          }
+        } else if (sourceType === 'hls' && videoRef.current) {
+          if (Math.abs(videoRef.current.currentTime - hostTime) > 3.5) {
+            videoRef.current.currentTime = hostTime;
+          }
         }
       }
     }
@@ -283,6 +308,13 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               broadcast({ type: 'PAUSE', currentTime: payload.currentTime });
             }
           }
+        } else if (payload.event === 'infoDelivery' && payload.info?.currentTime) {
+          const time = Number(payload.info.currentTime);
+          if (isHost) {
+            hostCurrentTimeRef.current = time;
+          } else {
+            viewerCurrentTimeRef.current = time;
+          }
         }
       } catch (err) {
         // Non-JSON iframe messages ignored
@@ -292,6 +324,83 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
     window.addEventListener('message', handleWindowMessage);
     return () => window.removeEventListener('message', handleWindowMessage);
   }, [isHost, broadcast]);
+
+  // Periodic time synchronization: Host broadcasts current playback timestamp every 3.5s
+  useEffect(() => {
+    if (!isHost) return;
+    const interval = setInterval(() => {
+      if (!isPlaying) return;
+      let curTime = 0;
+      if (sourceType === 'hls' && videoRef.current) {
+        curTime = videoRef.current.currentTime;
+      } else if (sourceType === 'embed') {
+        curTime = hostCurrentTimeRef.current;
+      }
+      if (curTime > 0) {
+        broadcast({
+          type: 'TIME_SYNC',
+          currentTime: curTime,
+        });
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [isHost, isPlaying, sourceType, broadcast]);
+
+  // Web Audio Keep-Alive: Registers tab as active audio producer with the browser
+  // Prevents Chrome/Edge from suspending or sleeping background tabs when user switches to Discord/apps
+  useEffect(() => {
+    let audioCtx: AudioContext | null = null;
+    let oscillator: OscillatorNode | null = null;
+
+    const startAudioKeepAlive = () => {
+      try {
+        if (!audioCtx) {
+          const AudioContextClass =
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          if (AudioContextClass) {
+            audioCtx = new AudioContextClass();
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.0001; // Inaudible
+            oscillator = audioCtx.createOscillator();
+            oscillator.frequency.value = 440;
+            oscillator.connect(gain);
+            gain.connect(audioCtx.destination);
+            oscillator.start();
+          }
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      } catch (err) {}
+    };
+
+    const handleGesture = () => {
+      startAudioKeepAlive();
+      window.removeEventListener('click', handleGesture);
+      window.removeEventListener('keydown', handleGesture);
+    };
+
+    window.addEventListener('click', handleGesture);
+    window.addEventListener('keydown', handleGesture);
+
+    return () => {
+      window.removeEventListener('click', handleGesture);
+      window.removeEventListener('keydown', handleGesture);
+      if (oscillator) {
+        try {
+          oscillator.stop();
+          oscillator.disconnect();
+        } catch (e) {}
+      }
+      if (audioCtx) {
+        try {
+          audioCtx.close();
+        } catch (e) {}
+      }
+    };
+  }, []);
 
   // Auto-switch to embed view if embedUrl was updated or shared, and broadcast to viewers
   const prevEmbedRef = useRef(settings.embedUrl);

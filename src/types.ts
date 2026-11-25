@@ -13,7 +13,7 @@ export interface StreamSettings {
   ambientGlow: boolean;
 }
 
-export type SyncActionType = 'STATE_SYNC' | 'PLAY' | 'PAUSE' | 'SEEK' | 'CHANGE_STREAM';
+export type SyncActionType = 'STATE_SYNC' | 'PLAY' | 'PAUSE' | 'SEEK' | 'CHANGE_STREAM' | 'TIME_SYNC';
 
 export interface SyncMessage {
   type: SyncActionType;
