@@ -25,6 +25,7 @@ import {
   ShieldAlert,
   Menu,
   X,
+  Clock,
   PictureInPicture2,
   ScreenShare,
   ScreenShareOff
@@ -58,6 +59,62 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
   const [isConnecting, setIsConnecting] = useState(true);
   const [hlsStats, setHlsStats] = useState<{ resolution: string; buffer: number } | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [countdownText, setCountdownText] = useState<string | null>(null);
+
+  // Live Countdown & Automated Showtime Playback Trigger
+  useEffect(() => {
+    if (!settings.scheduledTime) {
+      setCountdownText(null);
+      return;
+    }
+
+    const checkCountdown = () => {
+      const scheduledStr = settings.scheduledTime!;
+      let targetTimeMs: number | null = null;
+
+      if (/^\d{1,2}:\d{2}$/.test(scheduledStr)) {
+        const [hours, mins] = scheduledStr.split(':').map(Number);
+        const target = new Date();
+        target.setHours(hours, mins, 0, 0);
+        targetTimeMs = target.getTime();
+      } else {
+        const parsed = new Date(scheduledStr).getTime();
+        if (!isNaN(parsed)) targetTimeMs = parsed;
+      }
+
+      if (!targetTimeMs) {
+        setCountdownText(null);
+        return;
+      }
+
+      const diff = targetTimeMs - Date.now();
+      if (diff <= 0) {
+        // Showtime arrived!
+        setCountdownText(null);
+        if (settings.scheduledUrl && settings.scheduledUrl !== settings.embedUrl) {
+          updateSettings({
+            embedUrl: settings.scheduledUrl,
+            title: settings.scheduledTitle || settings.title,
+            scheduledTime: null,
+            scheduledTitle: null,
+            scheduledUrl: null,
+          });
+        }
+      } else {
+        const totalSeconds = Math.floor(diff / 1000);
+        const hrs = Math.floor(totalSeconds / 3600);
+        const mins = Math.floor((totalSeconds % 3600) / 60);
+        const secs = totalSeconds % 60;
+        setCountdownText(
+          `${hrs.toString().padStart(2, '0')}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`
+        );
+      }
+    };
+
+    checkCountdown();
+    const interval = setInterval(checkCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [settings.scheduledTime, settings.scheduledUrl, settings.scheduledTitle, settings.embedUrl, updateSettings]);
 
   // Incoming sync message handler (For Viewers)
   const handleReceiveSyncMessage = useCallback((msg: SyncMessage) => {
@@ -1081,6 +1138,36 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
           </div>
         )}
       </header>
+
+      {/* Live Showtime Countdown Banner */}
+      {countdownText && (
+        <div className="bg-gradient-to-r from-amber-950/70 via-zinc-950 to-amber-950/70 border-b border-amber-500/40 px-3 sm:px-6 py-2 flex items-center justify-between text-xs text-amber-200 animate-fade-in shadow-lg sticky top-[57px] z-30">
+          <div className="flex items-center gap-2 max-w-full overflow-hidden">
+            <Clock className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+            <span className="font-semibold text-amber-300 uppercase tracking-wider text-[11px] shrink-0">Showtime In:</span>
+            <span className="font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shrink-0">
+              {countdownText}
+            </span>
+            {settings.scheduledTitle && (
+              <span className="text-zinc-200 truncate hidden xs:inline font-medium">
+                • {settings.scheduledTitle}
+              </span>
+            )}
+          </div>
+          {isHost && (
+            <button
+              onClick={async () => {
+                await updateSettings({ scheduledTime: null, scheduledTitle: null, scheduledUrl: null });
+              }}
+              className="text-[11px] text-zinc-400 hover:text-red-400 flex items-center gap-1 transition-colors shrink-0 ml-2"
+              title="Cancel Scheduled Showtime"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cancel Schedule</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Main Theater Floor */}
       <main className="flex-1 flex flex-col items-center justify-center p-2 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">

@@ -410,6 +410,22 @@ function devApiPlugin(): Plugin {
                 devRoomState = { ...body };
                 if (body.viewerPasscode) serverState.viewerPasscode = body.viewerPasscode.trim();
                 if (body.hostPasscode) serverState.hostPasscode = body.hostPasscode.trim();
+
+                if (body.announceToDiscord) {
+                  const discordWebhook = process.env.DISCORD_SECURITY_WEBHOOK || process.env.DISCORD_WEBHOOK_URL;
+                  if (discordWebhook) {
+                    const eventTitle = body.customAnnouncement || body.scheduledTitle || body.title || 'Screening';
+                    const timeInfo = body.scheduledTime ? `\n⏰ **Showtime:** \`${body.scheduledTime}\`` : '';
+                    fetch(discordWebhook, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        content: `🎬 **WATCHPARTY SCREENING ANNOUNCEMENT**\n📢 **${eventTitle}**${timeInfo}\n🍿 **Join the Watchparty:** https://watchparty-vert.vercel.app`,
+                      }),
+                    }).catch(() => {});
+                  }
+                }
+
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({ ok: true }));

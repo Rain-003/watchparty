@@ -27,6 +27,9 @@ export interface DbRoomState {
   ambient_glow: boolean;
   is_locked_down: boolean;
   host_epoch: number;
+  scheduled_time?: string | null;
+  scheduled_title?: string | null;
+  scheduled_url?: string | null;
 }
 
 export interface DbSecurityState {

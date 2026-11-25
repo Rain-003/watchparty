@@ -14,13 +14,38 @@
  *   node tools/autoStream.js --url <URL> --now    # Plays stream immediately
  */
 
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function preventSleep() {
+  if (process.platform === 'win32') {
+    try {
+      exec('powercfg /change standby-timeout-ac 0');
+    } catch {}
+  }
+}
+
+function restoreSleep() {
+  if (process.platform === 'win32') {
+    try {
+      exec('powercfg /change standby-timeout-ac 30');
+    } catch {}
+  }
+}
+
+process.on('SIGINT', () => {
+  restoreSleep();
+  process.exit(0);
+});
+
+process.on('exit', () => {
+  restoreSleep();
+});
 
 // Dedicated profile directory to persist login session & Widevine DRM licenses
 const PROFILE_DIR = path.join(__dirname, 'streamer_profile');
@@ -113,6 +138,8 @@ function launchBrowser(targetUrl, autoPlay = true) {
     '--disable-background-timer-throttling',
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
+    '--disable-gpu',
+    '--disable-accelerated-video-decode',
     `--app=${targetUrl}`,
   ];
 
@@ -159,6 +186,8 @@ if (isLogin) {
   console.log(`\n⏰ STREAM SCHEDULED`);
   console.log(`Target Showtime: ${targetDate.toLocaleTimeString()} (${targetDate.toLocaleDateString()})`);
   console.log(`Stream URL:      ${targetUrl}`);
+  console.log(`Preventing Windows sleep until showtime...`);
+  preventSleep();
   console.log(`Waiting for scheduled time...\n`);
 
   let remaining = delayMs;

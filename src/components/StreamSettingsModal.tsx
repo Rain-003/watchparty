@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { X, Check, RefreshCw, Key, Link2, Tv, MessageSquare, Shield, Wand2, Copy, Share2 } from 'lucide-react';
+import { X, Check, RefreshCw, Key, Link2, Tv, MessageSquare, Shield, Wand2, Copy, Share2, Clock, CalendarX, Bell } from 'lucide-react';
 import { formatEmbedUrl, buildShareableLink } from '../utils/urlHelper';
 import { fetchStreamFromCloud } from '../services/cloudSync';
 
@@ -21,6 +21,11 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
     discordUrl: settings.discordUrl,
     autoPlay: settings.autoPlay,
     ambientGlow: settings.ambientGlow,
+    scheduledTime: settings.scheduledTime || '',
+    scheduledTitle: settings.scheduledTitle || '',
+    scheduledUrl: settings.scheduledUrl || '',
+    announceToDiscord: false,
+    customAnnouncement: '',
   });
 
   // Pre-load live passcodes and room details from Supabase when opening modal
@@ -38,6 +43,9 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
           discordUrl: liveData.discordUrl !== undefined ? (liveData.discordUrl || '') : prev.discordUrl,
           viewerPasscode: (liveData as any).viewerPasscode || prev.viewerPasscode,
           hostPasscode: (liveData as any).hostPasscode || prev.hostPasscode,
+          scheduledTime: liveData.scheduledTime || prev.scheduledTime,
+          scheduledTitle: liveData.scheduledTitle || prev.scheduledTitle,
+          scheduledUrl: liveData.scheduledUrl || prev.scheduledUrl,
         }));
       }
     };
@@ -52,12 +60,20 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
 
   if (!isOpen) return null;
 
+  const handleClearSchedule = async () => {
+    setFormData(prev => ({ ...prev, scheduledTime: '', scheduledTitle: '', scheduledUrl: '' }));
+    await updateSettings({ scheduledTime: null, scheduledTitle: null, scheduledUrl: null });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     const formattedData = {
       ...formData,
       embedUrl: formatEmbedUrl(formData.embedUrl),
+      scheduledUrl: formData.scheduledUrl ? formatEmbedUrl(formData.scheduledUrl) : null,
+      scheduledTime: formData.scheduledTime.trim() || null,
+      scheduledTitle: formData.scheduledTitle.trim() || null,
     };
     await updateSettings(formattedData);
 
@@ -284,6 +300,111 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
                 <li>Under Audience, ensure <strong>Age restriction is OFF</strong> (Don't restrict to 18+).</li>
                 <li>In Stream settings, ensure <strong>"Allow embedding" is checked</strong>.</li>
               </ul>
+            </div>
+          </div>
+
+          {/* Scheduled Showtime & Discord Announcement Card */}
+          <div className="p-3.5 bg-gradient-to-b from-amber-500/10 to-zinc-900/60 border border-amber-500/30 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
+                    Schedule Upcoming Showtime
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300">Auto-Plays</span>
+                  </h4>
+                  <p className="text-[10px] text-zinc-400">Sets a live countdown on the cinema screen for all viewers.</p>
+                </div>
+              </div>
+
+              {formData.scheduledTime && (
+                <button
+                  type="button"
+                  onClick={handleClearSchedule}
+                  className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 p-1 transition-colors"
+                  title="Clear Scheduled Stream"
+                >
+                  <CalendarX className="w-3.5 h-3.5" />
+                  <span>Clear</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-[11px] text-zinc-300 mb-1">
+                  Showtime (HH:MM e.g. 20:30)
+                </label>
+                <input
+                  type="text"
+                  value={formData.scheduledTime}
+                  onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
+                  placeholder="e.g. 20:30"
+                  className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500/60"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-zinc-300 mb-1">
+                  Event / Episode Title
+                </label>
+                <input
+                  type="text"
+                  value={formData.scheduledTitle}
+                  onChange={(e) => setFormData({ ...formData, scheduledTitle: e.target.value })}
+                  placeholder="e.g. Episode 5: The Premiere"
+                  className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/60"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-zinc-300 mb-1">
+                Showtime Stream Link (Plays automatically at showtime)
+              </label>
+              <input
+                type="text"
+                value={formData.scheduledUrl}
+                onChange={(e) => setFormData({ ...formData, scheduledUrl: e.target.value })}
+                placeholder="Paste YouTube, Twitch, or HLS stream link"
+                className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-300 focus:outline-none focus:border-amber-500/60"
+              />
+            </div>
+
+            {/* Customizable Discord Announcement */}
+            <div className="pt-2 border-t border-zinc-800/60 space-y-2">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs font-medium text-zinc-200 flex items-center gap-1.5">
+                  <Bell className="w-3.5 h-3.5 text-[#7983f5]" />
+                  Post Announcement to Community Discord
+                </span>
+                <input
+                  type="checkbox"
+                  checked={formData.announceToDiscord}
+                  onChange={(e) => setFormData({ ...formData, announceToDiscord: e.target.checked })}
+                  className="rounded bg-zinc-900 border-zinc-700 text-[#5865F2] focus:ring-0"
+                />
+              </label>
+
+              {formData.announceToDiscord && (
+                <div className="space-y-1 animate-fade-in">
+                  <label className="block text-[10px] text-zinc-400">
+                    Custom Announcement Message / Title:
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.customAnnouncement}
+                    onChange={(e) => setFormData({ ...formData, customAnnouncement: e.target.value })}
+                    placeholder="e.g. 🍿 Popcorn ready! Tonight's Screening starts at 8:30 PM!"
+                    className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-[#5865F2]"
+                  />
+                  <p className="text-[10px] text-zinc-500">
+                    This message will be sent to your Discord channel when you click Broadcast.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

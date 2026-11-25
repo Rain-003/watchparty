@@ -20,6 +20,11 @@ export interface StreamSettings {
   discordUrl: string;
   autoPlay: boolean;
   ambientGlow: boolean;
+  scheduledTime?: string | null;
+  scheduledTitle?: string | null;
+  scheduledUrl?: string | null;
+  announceToDiscord?: boolean;
+  customAnnouncement?: string | null;
 }
 
 export type SyncActionType = 'STATE_SYNC' | 'PLAY' | 'PAUSE' | 'SEEK' | 'CHANGE_STREAM' | 'TIME_SYNC';

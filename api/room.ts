@@ -51,7 +51,21 @@ export default async function handler(req: Request): Promise<Response> {
 
     try {
       const body = await req.json();
-      const { title, hlsUrl, embedUrl, discordUrl, autoPlay, ambientGlow, viewerPasscode, hostPasscode } = body;
+      const {
+        title,
+        hlsUrl,
+        embedUrl,
+        discordUrl,
+        autoPlay,
+        ambientGlow,
+        viewerPasscode,
+        hostPasscode,
+        scheduledTime,
+        scheduledTitle,
+        scheduledUrl,
+        announceToDiscord,
+        customAnnouncement,
+      } = body;
 
       // 1. Update Supabase Room Configuration
       await updateRoomInDb({
@@ -61,9 +75,32 @@ export default async function handler(req: Request): Promise<Response> {
         discord_url: discordUrl,
         auto_play: autoPlay,
         ambient_glow: ambientGlow,
+        scheduled_time: scheduledTime,
+        scheduled_title: scheduledTitle,
+        scheduled_url: scheduledUrl,
       });
 
-      // 2. If Host updated passcodes, save to Supabase party_security
+      // 2. Dispatch customizable Discord announcement if requested
+      if (announceToDiscord) {
+        const discordWebhook = process.env.DISCORD_SECURITY_WEBHOOK || process.env.DISCORD_WEBHOOK_URL;
+        if (discordWebhook) {
+          try {
+            const eventTitle = customAnnouncement || scheduledTitle || title || 'Community Screening';
+            const timeInfo = scheduledTime ? `\n⏰ **Showtime:** \`${scheduledTime}\`` : '';
+            await fetch(discordWebhook, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: `🎬 **WATCHPARTY SCREENING ANNOUNCEMENT**\n📢 **${eventTitle}**${timeInfo}\n🍿 **Join the Watchparty:** https://watchparty-vert.vercel.app`,
+              }),
+            });
+          } catch (e) {
+            console.warn('Discord announcement dispatch error:', e);
+          }
+        }
+      }
+
+      // 3. If Host updated passcodes, save to Supabase party_security
       const secUpdates: Record<string, string> = {};
       if (viewerPasscode && typeof viewerPasscode === 'string') {
         const vp = viewerPasscode.trim();
@@ -90,6 +127,9 @@ export default async function handler(req: Request): Promise<Response> {
         ambientGlow,
         viewerPasscode,
         hostPasscode,
+        scheduledTime,
+        scheduledTitle,
+        scheduledUrl,
         updatedAt: Date.now(),
       };
 
@@ -126,6 +166,9 @@ export default async function handler(req: Request): Promise<Response> {
       autoPlay: dbRoom.auto_play,
       ambientGlow: dbRoom.ambient_glow,
       lockdown: dbRoom.is_locked_down,
+      scheduledTime: dbRoom.scheduled_time || null,
+      scheduledTitle: dbRoom.scheduled_title || null,
+      scheduledUrl: dbRoom.scheduled_url || null,
     };
 
     if (includePasscodes) {

@@ -16,6 +16,11 @@ export const DEFAULT_SETTINGS: StreamSettings = {
   discordUrl: import.meta.env.VITE_DISCORD_URL || 'https://discord.com',
   autoPlay: true,
   ambientGlow: true,
+  scheduledTime: null,
+  scheduledTitle: null,
+  scheduledUrl: null,
+  announceToDiscord: false,
+  customAnnouncement: null,
 };
 
 export function getStoredSettings(): StreamSettings {
