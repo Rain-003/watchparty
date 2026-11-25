@@ -1,5 +1,6 @@
 import { verifySession } from './cryptoHelper';
 import { serverState, AUTH_SECRET } from './serverState';
+import { fetchSecurityFromDb, updateSecurityInDb, fetchRoomFromDb, updateRoomInDb } from './supabaseServer';
 
 export const config = {
   runtime: 'edge',
@@ -31,15 +32,27 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'Forbidden: Owner privilege required' }), { status: 403, headers });
   }
 
+  // Load from Supabase
+  const [dbSec, dbRoom] = await Promise.all([
+    fetchSecurityFromDb(),
+    fetchRoomFromDb(),
+  ]);
+
+  const currentHostEpoch = dbRoom?.host_epoch ?? serverState.hostEpoch;
+  const isLockedDown = dbRoom?.is_locked_down ?? serverState.lockdown;
+  const activeOwnerEmail = dbSec?.owner_email || serverState.ownerEmail;
+  const activeHostPasscode = dbSec?.host_passcode || serverState.hostPasscode;
+  const activeViewerPasscode = dbSec?.viewer_passcode || serverState.viewerPasscode;
+
   // GET: Return current system status to Owner Admin Panel
   if (req.method === 'GET') {
     return new Response(JSON.stringify({
       ok: true,
-      ownerEmail: serverState.ownerEmail,
-      hostPasscode: serverState.hostPasscode,
-      viewerPasscode: serverState.viewerPasscode,
-      hostEpoch: serverState.hostEpoch,
-      lockdown: serverState.lockdown,
+      ownerEmail: activeOwnerEmail,
+      hostPasscode: activeHostPasscode,
+      viewerPasscode: activeViewerPasscode,
+      hostEpoch: currentHostEpoch,
+      lockdown: isLockedDown,
     }), { status: 200, headers });
   }
 
@@ -51,21 +64,27 @@ export default async function handler(req: Request): Promise<Response> {
 
       // 1. Invalidate and kick all active host & viewer sessions
       if (action === 'revoke_hosts') {
-        serverState.hostEpoch += 1;
+        const nextEpoch = currentHostEpoch + 1;
+        serverState.hostEpoch = nextEpoch;
+        await updateRoomInDb({ host_epoch: nextEpoch });
+
         return new Response(JSON.stringify({
           ok: true,
           message: 'All existing host sessions have been revoked immediately.',
-          hostEpoch: serverState.hostEpoch,
+          hostEpoch: nextEpoch,
         }), { status: 200, headers });
       }
 
       // 2. Toggle emergency room lockdown
       if (action === 'toggle_lockdown') {
-        serverState.lockdown = !!body.lockdown;
+        const targetLockdown = !!body.lockdown;
+        serverState.lockdown = targetLockdown;
+        await updateRoomInDb({ is_locked_down: targetLockdown });
+
         return new Response(JSON.stringify({
           ok: true,
-          lockdown: serverState.lockdown,
-          message: serverState.lockdown ? 'Room lockdown enabled' : 'Room lockdown lifted',
+          lockdown: targetLockdown,
+          message: targetLockdown ? 'Room lockdown enabled' : 'Room lockdown lifted',
         }), { status: 200, headers });
       }
 
@@ -75,22 +94,32 @@ export default async function handler(req: Request): Promise<Response> {
         if (!newEmail || typeof newEmail !== 'string' || !newEmail.includes('@')) {
           return new Response(JSON.stringify({ ok: false, error: 'Valid email address required' }), { status: 400, headers });
         }
-        serverState.ownerEmail = newEmail.trim();
+        const cleaned = newEmail.trim();
+        serverState.ownerEmail = cleaned;
+        await updateSecurityInDb({ owner_email: cleaned });
+
         return new Response(JSON.stringify({
           ok: true,
           message: 'Owner recovery email updated successfully',
-          ownerEmail: serverState.ownerEmail,
+          ownerEmail: cleaned,
         }), { status: 200, headers });
       }
 
       // 4. Update Host / Viewer passcodes on the fly
       if (action === 'update_passcodes') {
+        const updates: Record<string, string> = {};
         if (body.hostPasscode && typeof body.hostPasscode === 'string') {
-          serverState.hostPasscode = body.hostPasscode.trim();
+          const hp = body.hostPasscode.trim();
+          serverState.hostPasscode = hp;
+          updates.host_passcode = hp;
         }
         if (body.viewerPasscode && typeof body.viewerPasscode === 'string') {
-          serverState.viewerPasscode = body.viewerPasscode.trim();
+          const vp = body.viewerPasscode.trim();
+          serverState.viewerPasscode = vp;
+          updates.viewer_passcode = vp;
         }
+        await updateSecurityInDb(updates);
+
         return new Response(JSON.stringify({
           ok: true,
           message: 'Passcodes updated successfully',

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { StreamSourceType, SyncMessage } from '../types';
 import { getStreamFromUrl } from '../utils/urlHelper';
 import { useP2PSync } from '../services/p2pSync';
+import { subscribeToRoomRealtime } from '../services/supabaseClient';
 import {
   Maximize,
   Minimize,
@@ -116,6 +117,26 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
       }
     }
   }, [isHost, sourceType, settings, updateSettings]);
+
+  // Supabase Realtime Database Sync (Instant WebSockets stream update for all viewers)
+  useEffect(() => {
+    if (isHost) return;
+
+    const unsubscribe = subscribeToRoomRealtime((newRoom) => {
+      if (!newRoom) return;
+      if (newRoom.backup_embed_url && newRoom.backup_embed_url !== settings.embedUrl) {
+        updateSettings({
+          embedUrl: newRoom.backup_embed_url,
+          title: newRoom.title || settings.title,
+          hlsUrl: newRoom.primary_hls_url || settings.hlsUrl,
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isHost, settings.embedUrl, settings.title, settings.hlsUrl, updateSettings]);
 
   // Provide state to newly connected viewers
   const getLatestState = useCallback(() => {

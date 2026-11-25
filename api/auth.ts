@@ -1,5 +1,6 @@
 import { signSession, verifySession } from './cryptoHelper';
 import { serverState, AUTH_SECRET, sendOtpEmail } from './serverState';
+import { fetchSecurityFromDb, fetchRoomFromDb } from './supabaseServer';
 
 export const config = {
   runtime: 'edge',
@@ -28,6 +29,20 @@ export default async function handler(req: Request): Promise<Response> {
     const body = await req.json();
     const { action, passcode, token, otp } = body;
 
+    // Load dynamic state from Supabase (with fallback)
+    const [dbSec, dbRoom] = await Promise.all([
+      fetchSecurityFromDb(),
+      fetchRoomFromDb(),
+    ]);
+
+    const activeMasterPasscode = dbSec?.master_passcode || serverState.masterPasscode;
+    const activeMasterRecoveryOtp = dbSec?.master_recovery_otp || serverState.masterRecoveryOtp;
+    const activeHostPasscode = dbSec?.host_passcode || serverState.hostPasscode;
+    const activeViewerPasscode = dbSec?.viewer_passcode || serverState.viewerPasscode;
+    const activeOwnerEmail = dbSec?.owner_email || serverState.ownerEmail;
+    const activeHostEpoch = dbRoom?.host_epoch ?? serverState.hostEpoch;
+    const isLockedDown = dbRoom?.is_locked_down ?? serverState.lockdown;
+
     // 1. Verify an existing signed token
     if (action === 'verify') {
       if (!token || typeof token !== 'string') {
@@ -40,12 +55,12 @@ export default async function handler(req: Request): Promise<Response> {
       }
 
       // Check if session was invalidated by emergency revocation (Owner is exempt)
-      if (!payload.isSuperAdmin && payload.epoch && payload.epoch < serverState.hostEpoch) {
+      if (!payload.isSuperAdmin && payload.epoch && payload.epoch < activeHostEpoch) {
         return new Response(JSON.stringify({ ok: false, error: 'SESSION_REVOKED', message: 'Session revoked by Owner' }), { status: 401, headers });
       }
 
       // Check if room is in lockdown mode (Owner is exempt)
-      if (serverState.lockdown && !payload.isSuperAdmin) {
+      if (isLockedDown && !payload.isSuperAdmin) {
         return new Response(JSON.stringify({ ok: false, error: 'ROOM_LOCKDOWN', message: 'Room locked by Owner' }), { status: 403, headers });
       }
 
@@ -54,7 +69,7 @@ export default async function handler(req: Request): Promise<Response> {
         role: payload.role,
         isSuperAdmin: payload.isSuperAdmin,
         exp: payload.exp,
-        lockdown: serverState.lockdown,
+        lockdown: isLockedDown,
       }), { status: 200, headers });
     }
 
@@ -68,8 +83,8 @@ export default async function handler(req: Request): Promise<Response> {
 
       // Master Emergency Recovery Bypass (Guarantees owner access if email fails or is delayed)
       const isMasterRecovery = 
-        trimmedOtp === serverState.masterRecoveryOtp || 
-        trimmedOtp === serverState.masterPasscode;
+        trimmedOtp === activeMasterRecoveryOtp || 
+        trimmedOtp === activeMasterPasscode;
 
       if (!isMasterRecovery) {
         const active = serverState.activeOtp;
@@ -100,7 +115,7 @@ export default async function handler(req: Request): Promise<Response> {
         role: 'host' as const,
         isSuperAdmin: true,
         exp: Date.now() + SESSION_DURATION_MS,
-        epoch: serverState.hostEpoch,
+        epoch: activeHostEpoch,
       };
 
       const signedToken = await signSession(payload, AUTH_SECRET);
@@ -122,17 +137,17 @@ export default async function handler(req: Request): Promise<Response> {
       const trimmed = passcode.trim();
 
       // Check master owner key -> TRIGGERS 2FA EMAIL OTP
-      if (trimmed === serverState.masterPasscode) {
+      if (trimmed === activeMasterPasscode) {
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         serverState.activeOtp = {
           code: otpCode,
           exp: Date.now() + 10 * 60 * 1000, // 10 minutes
-          email: serverState.ownerEmail,
+          email: activeOwnerEmail,
           attempts: 0,
         };
 
         // Dispatch email to owner in background
-        await sendOtpEmail(serverState.ownerEmail, otpCode);
+        await sendOtpEmail(activeOwnerEmail, otpCode);
 
         // Stealth response: Never reveal the email address or OTP in client responses
         return new Response(JSON.stringify({
@@ -142,17 +157,17 @@ export default async function handler(req: Request): Promise<Response> {
       }
 
       // If room is locked down, ordinary hosts and viewers cannot log in
-      if (serverState.lockdown) {
+      if (isLockedDown) {
         return new Response(JSON.stringify({ ok: false, error: 'ROOM_LOCKDOWN', message: 'Screening room is currently under emergency lockdown by Owner.' }), { status: 403, headers });
       }
 
       // Check host passcode
-      if (trimmed === serverState.hostPasscode) {
+      if (trimmed === activeHostPasscode) {
         const payload = {
           role: 'host' as const,
           isSuperAdmin: false,
           exp: Date.now() + SESSION_DURATION_MS,
-          epoch: serverState.hostEpoch,
+          epoch: activeHostEpoch,
         };
         const signedToken = await signSession(payload, AUTH_SECRET);
         return new Response(JSON.stringify({
@@ -164,12 +179,12 @@ export default async function handler(req: Request): Promise<Response> {
       }
 
       // Check viewer passcode
-      if (trimmed === serverState.viewerPasscode) {
+      if (trimmed === activeViewerPasscode) {
         const payload = {
           role: 'viewer' as const,
           isSuperAdmin: false,
           exp: Date.now() + SESSION_DURATION_MS,
-          epoch: serverState.hostEpoch,
+          epoch: activeHostEpoch,
         };
         const signedToken = await signSession(payload, AUTH_SECRET);
         return new Response(JSON.stringify({
