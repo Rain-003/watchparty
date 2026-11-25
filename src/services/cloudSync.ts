@@ -1,14 +1,14 @@
 import { StreamSettings } from '../types';
 
 // Using localStorage for same-device testing +
-// a lightweight public pastebin-style endpoint for cross-device sync
-// The host saves the embedUrl to a Vercel KV key via our own API route
+// a lightweight Vercel Edge Serverless endpoint for cross-device sync
 const API_BASE = '/api/room';
 
 /**
  * Pushes the host's stream URL to the serverless API so viewers can fetch it.
+ * Requires a cryptographically signed Host token for authorization.
  */
-export async function pushStreamToCloud(settings: StreamSettings): Promise<boolean> {
+export async function pushStreamToCloud(settings: StreamSettings, token?: string | null): Promise<boolean> {
   try {
     const publicPayload = {
       title: settings.title,
@@ -20,9 +20,17 @@ export async function pushStreamToCloud(settings: StreamSettings): Promise<boole
       updatedAt: Date.now(),
     };
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(API_BASE, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(publicPayload),
     });
 

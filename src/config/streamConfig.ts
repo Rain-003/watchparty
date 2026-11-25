@@ -2,14 +2,13 @@ import { StreamSettings } from '../types';
 
 export const STORAGE_KEY_AUTH_ROLE = 'watchparty_auth_role';
 export const STORAGE_KEY_SETTINGS = 'watchparty_custom_settings';
-
-// Immutable owner master key that cannot be changed by the host in UI
-export const MASTER_ADMIN_PASSCODE = import.meta.env.VITE_MASTER_PASSCODE || 'wRain1234';
+export const STORAGE_KEY_SESSION_TOKEN = 'watchparty_session_token';
+export const STORAGE_KEY_SUPER = 'watchparty_is_super_admin';
 
 export const DEFAULT_SETTINGS: StreamSettings = {
   title: import.meta.env.VITE_STREAM_TITLE || 'Community Watchparty',
-  viewerPasscode: import.meta.env.VITE_VIEWER_PASSCODE || 'watchparty',
-  hostPasscode: import.meta.env.VITE_HOST_PASSCODE || 'party-host',
+  viewerPasscode: '',
+  hostPasscode: '',
   // Default working public test HLS stream
   hlsUrl: import.meta.env.VITE_PRIMARY_HLS_URL || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
   // Fallback YouTube embed (24/7 active stream)

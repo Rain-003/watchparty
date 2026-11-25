@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Lock, Eye, EyeOff, Film, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Lock, Eye, EyeOff, Film, ArrowRight, ShieldCheck, Loader2 } from 'lucide-react';
 
 export const PasscodeGate: React.FC = () => {
   const { login, settings } = useAuth();
@@ -8,16 +8,24 @@ export const PasscodeGate: React.FC = () => {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!passcode.trim()) return;
+    if (!passcode.trim() || isSubmitting) return;
 
-    const res = login(passcode);
-    if (!res.success) {
-      setError(true);
-      setShake(true);
-      setTimeout(() => setShake(false), 500);
+    setIsSubmitting(true);
+    setError(false);
+
+    try {
+      const res = await login(passcode);
+      if (!res.success) {
+        setError(true);
+        setShake(true);
+        setTimeout(() => setShake(false), 500);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -74,6 +82,7 @@ export const PasscodeGate: React.FC = () => {
                   id="passcode-input"
                   type={showPass ? 'text' : 'password'}
                   value={passcode}
+                  disabled={isSubmitting}
                   onChange={(e) => {
                     setPasscode(e.target.value);
                     if (error) setError(false);
@@ -106,21 +115,31 @@ export const PasscodeGate: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full py-3 px-4 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-sm rounded-xl transition-all duration-150 flex items-center justify-center space-x-2 group active:scale-[0.99] shadow-lg shadow-white/5"
+              disabled={isSubmitting}
+              className="w-full py-3 px-4 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-sm rounded-xl transition-all duration-150 flex items-center justify-center space-x-2 group active:scale-[0.99] shadow-lg shadow-white/5 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <span>Enter Watchparty</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-900" />
+                  <span>Verifying Session...</span>
+                </>
+              ) : (
+                <>
+                  <span>Enter Watchparty</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </>
+              )}
             </button>
           </form>
 
           {/* Footer note */}
           <div className="mt-6 pt-4 border-t border-zinc-900/80 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
             <span className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-zinc-600" />
-              Role Gated
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              HMAC Cryptographically Verified
             </span>
             <span className="text-zinc-600">
-              Host / Viewer separation active
+              Host / Viewer separation
             </span>
           </div>
         </div>

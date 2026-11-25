@@ -5,8 +5,21 @@ import { CinemaPlayer } from './components/CinemaPlayer';
 import { StreamSettingsModal } from './components/StreamSettingsModal';
 
 const WatchPartyContent: React.FC = () => {
-  const { isAuthenticated, isHost } = useAuth();
+  const { isAuthenticated, isHost, isLoading } = useAuth();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#08080a] flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-6 h-6 border-2 border-amber-500/20 border-t-amber-400 rounded-full animate-spin" />
+          <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">
+            Validating Session...
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <PasscodeGate />;

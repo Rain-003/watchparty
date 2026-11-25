@@ -1,8 +1,10 @@
 // Vercel Serverless API Route: /api/room
 // Stores the host's active stream URL in-memory and serves it to all viewers.
-// Vercel Edge Functions are stateless per-instance, so we use a module-level
-// variable as a fast in-memory cache. For persistent cross-instance state,
-// set the ROOM_DATA environment variable in Vercel as a JSON string of defaults.
+// POST requests strictly require a cryptographically signed Host token in Authorization header.
+
+import { verifySession } from './cryptoHelper';
+
+const AUTH_SECRET = process.env.AUTH_SECRET || 'watchparty-vault-secret-key-32chars!!';
 
 let roomState: Record<string, unknown> = {};
 
@@ -23,7 +25,7 @@ export default async function handler(req: Request): Promise<Response> {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Cache-Control': 'no-store, no-cache, must-revalidate',
     'Content-Type': 'application/json',
   };
@@ -33,6 +35,19 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   if (req.method === 'POST') {
+    // Security check: Only verified hosts can update room state
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Host token required' }), { status: 401, headers });
+    }
+
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const payload = await verifySession(token, AUTH_SECRET);
+
+    if (!payload || payload.role !== 'host') {
+      return new Response(JSON.stringify({ error: 'Forbidden: Valid Host session required' }), { status: 403, headers });
+    }
+
     try {
       const body = await req.json();
       // Only allow viewer-safe fields — never store passcodes
