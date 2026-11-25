@@ -1,16 +1,19 @@
 import { signSession, verifySession } from './cryptoHelper';
+import { serverState, AUTH_SECRET, sendOtpEmail } from './serverState';
 
 export const config = {
   runtime: 'edge',
 };
 
-const AUTH_SECRET = process.env.AUTH_SECRET || 'watchparty-vault-secret-key-32chars!!';
-const MASTER_PASSCODE = process.env.MASTER_PASSCODE || 'wRain1234';
-const HOST_PASSCODE = process.env.HOST_PASSCODE || 'party-host';
-const VIEWER_PASSCODE = process.env.VIEWER_PASSCODE || 'watchparty';
-
-// 7 days expiration
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+
+function maskEmail(email: string): string {
+  const parts = email.split('@');
+  if (parts.length !== 2) return email;
+  const [user, domain] = parts;
+  const visible = user.length > 2 ? user.slice(0, 2) + '***' + user.slice(-1) : user + '***';
+  return `${visible}@${domain}`;
+}
 
 export default async function handler(req: Request): Promise<Response> {
   const headers = {
@@ -31,7 +34,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   try {
     const body = await req.json();
-    const { action, passcode, token } = body;
+    const { action, passcode, token, otp } = body;
 
     // 1. Verify an existing signed token
     if (action === 'verify') {
@@ -44,15 +47,73 @@ export default async function handler(req: Request): Promise<Response> {
         return new Response(JSON.stringify({ ok: false, error: 'Invalid or expired token' }), { status: 401, headers });
       }
 
+      // Check if session was invalidated by emergency revocation (Owner is exempt)
+      if (!payload.isSuperAdmin && payload.epoch && payload.epoch < serverState.hostEpoch) {
+        return new Response(JSON.stringify({ ok: false, error: 'SESSION_REVOKED', message: 'Session revoked by Owner' }), { status: 401, headers });
+      }
+
+      // Check if room is in lockdown mode (Owner is exempt)
+      if (serverState.lockdown && !payload.isSuperAdmin) {
+        return new Response(JSON.stringify({ ok: false, error: 'ROOM_LOCKDOWN', message: 'Room locked by Owner' }), { status: 403, headers });
+      }
+
       return new Response(JSON.stringify({
         ok: true,
         role: payload.role,
         isSuperAdmin: payload.isSuperAdmin,
         exp: payload.exp,
+        lockdown: serverState.lockdown,
       }), { status: 200, headers });
     }
 
-    // 2. Login with passcode & issue a cryptographically signed HMAC token
+    // 2. Verify 2FA OTP for Owner
+    if (action === 'verify_otp') {
+      if (!otp || typeof otp !== 'string') {
+        return new Response(JSON.stringify({ ok: false, error: 'OTP code required' }), { status: 400, headers });
+      }
+
+      const active = serverState.activeOtp;
+      if (!active) {
+        return new Response(JSON.stringify({ ok: false, error: 'No pending verification. Please log in again.' }), { status: 400, headers });
+      }
+
+      if (Date.now() > active.exp) {
+        serverState.activeOtp = null;
+        return new Response(JSON.stringify({ ok: false, error: 'Verification code expired. Please request a new one.' }), { status: 400, headers });
+      }
+
+      if (active.attempts >= 5) {
+        serverState.activeOtp = null;
+        return new Response(JSON.stringify({ ok: false, error: 'Too many failed attempts. Code invalidated.' }), { status: 429, headers });
+      }
+
+      if (otp.trim() !== active.code) {
+        active.attempts += 1;
+        return new Response(JSON.stringify({ ok: false, error: 'Invalid verification code' }), { status: 401, headers });
+      }
+
+      // OTP Verified successfully! Issue elevated Owner session token
+      serverState.activeOtp = null;
+
+      const payload = {
+        role: 'host' as const,
+        isSuperAdmin: true,
+        exp: Date.now() + SESSION_DURATION_MS,
+        epoch: serverState.hostEpoch,
+      };
+
+      const signedToken = await signSession(payload, AUTH_SECRET);
+
+      return new Response(JSON.stringify({
+        ok: true,
+        role: 'host',
+        isSuperAdmin: true,
+        token: signedToken,
+        email: serverState.ownerEmail,
+      }), { status: 200, headers });
+    }
+
+    // 3. Login with passcode
     if (action === 'login') {
       if (!passcode || typeof passcode !== 'string') {
         return new Response(JSON.stringify({ ok: false, error: 'Passcode required' }), { status: 400, headers });
@@ -60,55 +121,66 @@ export default async function handler(req: Request): Promise<Response> {
 
       const trimmed = passcode.trim();
 
-      // Check master admin key
-      if (trimmed === MASTER_PASSCODE) {
-        const payload = {
-          role: 'host' as const,
-          isSuperAdmin: true,
-          exp: Date.now() + SESSION_DURATION_MS,
+      // Check master owner key -> TRIGGERS 2FA EMAIL OTP
+      if (trimmed === serverState.masterPasscode) {
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        serverState.activeOtp = {
+          code: otpCode,
+          exp: Date.now() + 10 * 60 * 1000, // 10 minutes
+          email: serverState.ownerEmail,
+          attempts: 0,
         };
-        const signedToken = await signSession(payload, AUTH_SECRET);
+
+        const emailResult = await sendOtpEmail(serverState.ownerEmail, otpCode);
+
         return new Response(JSON.stringify({
           ok: true,
-          role: payload.role,
-          isSuperAdmin: true,
-          token: signedToken,
+          requiresOtp: true,
+          email: maskEmail(serverState.ownerEmail),
+          fullEmail: serverState.ownerEmail,
+          devOtp: emailResult.devMode ? otpCode : undefined,
         }), { status: 200, headers });
       }
 
+      // If room is locked down, ordinary hosts and viewers cannot log in
+      if (serverState.lockdown) {
+        return new Response(JSON.stringify({ ok: false, error: 'ROOM_LOCKDOWN', message: 'Screening room is currently under emergency lockdown by Owner.' }), { status: 403, headers });
+      }
+
       // Check host passcode
-      if (trimmed === HOST_PASSCODE) {
+      if (trimmed === serverState.hostPasscode) {
         const payload = {
           role: 'host' as const,
           isSuperAdmin: false,
           exp: Date.now() + SESSION_DURATION_MS,
+          epoch: serverState.hostEpoch,
         };
         const signedToken = await signSession(payload, AUTH_SECRET);
         return new Response(JSON.stringify({
           ok: true,
-          role: payload.role,
+          role: 'host',
           isSuperAdmin: false,
           token: signedToken,
         }), { status: 200, headers });
       }
 
       // Check viewer passcode
-      if (trimmed === VIEWER_PASSCODE) {
+      if (trimmed === serverState.viewerPasscode) {
         const payload = {
           role: 'viewer' as const,
           isSuperAdmin: false,
           exp: Date.now() + SESSION_DURATION_MS,
+          epoch: serverState.hostEpoch,
         };
         const signedToken = await signSession(payload, AUTH_SECRET);
         return new Response(JSON.stringify({
           ok: true,
-          role: payload.role,
+          role: 'viewer',
           isSuperAdmin: false,
           token: signedToken,
         }), { status: 200, headers });
       }
 
-      // Invalid passcode
       return new Response(JSON.stringify({ ok: false, error: 'Invalid passcode' }), { status: 401, headers });
     }
 

@@ -12,6 +12,14 @@ import { StreamSettings, UserRole } from '../types';
 import { getStreamFromUrl } from '../utils/urlHelper';
 import { pushStreamToCloud } from '../services/cloudSync';
 
+interface LoginResult {
+  success: boolean;
+  role?: UserRole;
+  requiresOtp?: boolean;
+  email?: string;
+  devOtp?: string;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
   userRole: UserRole | null;
@@ -19,7 +27,8 @@ interface AuthContextType {
   isSuperAdmin: boolean;
   token: string | null;
   isLoading: boolean;
-  login: (code: string) => Promise<{ success: boolean; role?: UserRole }>;
+  login: (code: string) => Promise<LoginResult>;
+  verifyOtp: (otp: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   settings: StreamSettings;
   updateSettings: (newSettings: Partial<StreamSettings>) => Promise<void>;
@@ -36,7 +45,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [settings, setSettings] = useState<StreamSettings>(() => {
     const base = getStoredSettings();
-    // Priority 1: If a stream URL is encoded in the page URL (?v=... or ?stream=...)
     const urlStream = getStreamFromUrl();
     if (urlStream) {
       return { ...base, embedUrl: urlStream };
@@ -50,7 +58,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const savedToken = localStorage.getItem(STORAGE_KEY_SESSION_TOKEN);
 
       if (!savedToken) {
-        // No session token -> clear any legacy or spoofed localStorage role
         localStorage.removeItem(STORAGE_KEY_AUTH_ROLE);
         localStorage.removeItem(STORAGE_KEY_SUPER);
         setUserRole(null);
@@ -87,7 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('Session verification error:', err);
       }
 
-      // If verification fails or token is forged/expired, purge session
+      // If verification fails or session was revoked, purge storage
       localStorage.removeItem(STORAGE_KEY_SESSION_TOKEN);
       localStorage.removeItem(STORAGE_KEY_AUTH_ROLE);
       localStorage.removeItem(STORAGE_KEY_SUPER);
@@ -100,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     verifyStoredSession();
   }, []);
 
-  const login = async (code: string): Promise<{ success: boolean; role?: UserRole }> => {
+  const login = async (code: string): Promise<LoginResult> => {
     const trimmed = code.trim();
     if (!trimmed) return { success: false };
 
@@ -113,6 +120,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (res.ok) {
         const data = await res.json();
+
+        // 2FA OTP flow for Owner
+        if (data.requiresOtp) {
+          return {
+            success: true,
+            requiresOtp: true,
+            email: data.fullEmail || data.email,
+            devOtp: data.devOtp,
+          };
+        }
+
+        // Direct token for Host/Viewer
         if (data.ok && data.token) {
           localStorage.setItem(STORAGE_KEY_SESSION_TOKEN, data.token);
           localStorage.setItem(STORAGE_KEY_AUTH_ROLE, data.role);
@@ -136,6 +155,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: false };
   };
 
+  const verifyOtp = async (otpCode: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify_otp', otp: otpCode }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok && data.token) {
+          localStorage.setItem(STORAGE_KEY_SESSION_TOKEN, data.token);
+          localStorage.setItem(STORAGE_KEY_AUTH_ROLE, 'host');
+          localStorage.setItem(STORAGE_KEY_SUPER, 'true');
+
+          setToken(data.token);
+          setUserRole('host');
+          setIsSuperAdmin(true);
+
+          return { success: true };
+        }
+      } else {
+        const data = await res.json();
+        return { success: false, error: data.error || 'Invalid code' };
+      }
+    } catch (err) {
+      console.error('OTP verification failed:', err);
+    }
+
+    return { success: false, error: 'Network error verifying code' };
+  };
+
   const logout = () => {
     localStorage.removeItem(STORAGE_KEY_SESSION_TOKEN);
     localStorage.removeItem(STORAGE_KEY_AUTH_ROLE);
@@ -150,7 +201,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSettings(updated);
     saveStoredSettings(updated);
 
-    // Sync to cloud edge if host token is present
     if (token && userRole === 'host') {
       await pushStreamToCloud(updated, token);
     }
@@ -171,6 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         isLoading,
         login,
+        verifyOtp,
         logout,
         settings,
         updateSettings,

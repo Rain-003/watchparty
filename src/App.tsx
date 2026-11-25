@@ -3,10 +3,12 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { PasscodeGate } from './components/PasscodeGate';
 import { CinemaPlayer } from './components/CinemaPlayer';
 import { StreamSettingsModal } from './components/StreamSettingsModal';
+import { OwnerAdminModal } from './components/OwnerAdminModal';
 
 const WatchPartyContent: React.FC = () => {
-  const { isAuthenticated, isHost, isLoading } = useAuth();
+  const { isAuthenticated, isHost, isSuperAdmin, isLoading } = useAuth();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isOwnerAdminOpen, setIsOwnerAdminOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -27,11 +29,20 @@ const WatchPartyContent: React.FC = () => {
 
   return (
     <>
-      <CinemaPlayer onOpenSettings={() => setIsSettingsOpen(true)} />
+      <CinemaPlayer
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenOwnerAdmin={() => setIsOwnerAdminOpen(true)}
+      />
       {isHost && (
         <StreamSettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
+      {isSuperAdmin && (
+        <OwnerAdminModal
+          isOpen={isOwnerAdminOpen}
+          onClose={() => setIsOwnerAdminOpen(false)}
         />
       )}
     </>

@@ -5,6 +5,7 @@ export interface SessionPayload {
   role: 'viewer' | 'host';
   isSuperAdmin: boolean;
   exp: number; // Unix timestamp in ms
+  epoch?: number; // Invalidation epoch
 }
 
 function stringToUint8Array(str: string): Uint8Array {
@@ -32,7 +33,6 @@ function hexToUint8Array(hex: string): Uint8Array | null {
 }
 
 function toBase64Url(str: string): string {
-  // Edge runtime TextEncoder -> btoa or Buffer
   try {
     if (typeof btoa === 'function') {
       return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

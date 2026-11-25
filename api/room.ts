@@ -3,8 +3,7 @@
 // POST requests strictly require a cryptographically signed Host token in Authorization header.
 
 import { verifySession } from './cryptoHelper';
-
-const AUTH_SECRET = process.env.AUTH_SECRET || 'watchparty-vault-secret-key-32chars!!';
+import { serverState, AUTH_SECRET } from './serverState';
 
 let roomState: Record<string, unknown> = {};
 
@@ -48,6 +47,16 @@ export default async function handler(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: 'Forbidden: Valid Host session required' }), { status: 403, headers });
     }
 
+    // Check if session was revoked by Owner (Owner is exempt)
+    if (!payload.isSuperAdmin && payload.epoch && payload.epoch < serverState.hostEpoch) {
+      return new Response(JSON.stringify({ error: 'Forbidden: Host session has been revoked by Owner' }), { status: 403, headers });
+    }
+
+    // Check lockdown mode (Owner is exempt)
+    if (serverState.lockdown && !payload.isSuperAdmin) {
+      return new Response(JSON.stringify({ error: 'Forbidden: Room is locked down by Owner' }), { status: 403, headers });
+    }
+
     try {
       const body = await req.json();
       // Only allow viewer-safe fields — never store passcodes
@@ -60,6 +69,10 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   // GET - return current room state to viewers
+  if (serverState.lockdown) {
+    return new Response(JSON.stringify({ lockdown: true, title: 'Screening Room Locked (Maintenance)' }), { status: 200, headers });
+  }
+
   if (Object.keys(roomState).length === 0) {
     return new Response(JSON.stringify({}), { status: 200, headers });
   }

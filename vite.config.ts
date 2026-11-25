@@ -1,12 +1,17 @@
 import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { signSession, verifySession } from './api/cryptoHelper';
+import { serverState, AUTH_SECRET, sendOtpEmail } from './api/serverState';
 
-const AUTH_SECRET = process.env.AUTH_SECRET || 'watchparty-vault-secret-key-32chars!!';
-const MASTER_PASSCODE = process.env.MASTER_PASSCODE || 'wRain1234';
-const HOST_PASSCODE = process.env.HOST_PASSCODE || 'party-host';
-const VIEWER_PASSCODE = process.env.VIEWER_PASSCODE || 'watchparty';
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+
+function maskEmail(email: string): string {
+  const parts = email.split('@');
+  if (parts.length !== 2) return email;
+  const [user, domain] = parts;
+  const visible = user.length > 2 ? user.slice(0, 2) + '***' + user.slice(-1) : user + '***';
+  return `${visible}@${domain}`;
+}
 
 let devRoomState: Record<string, unknown> = {};
 
@@ -24,7 +29,7 @@ function devApiPlugin(): Plugin {
           req.on('end', async () => {
             try {
               const body = JSON.parse(bodyStr || '{}');
-              const { action, passcode, token } = body;
+              const { action, passcode, token, otp } = body;
 
               if (action === 'verify') {
                 if (!token) {
@@ -38,6 +43,16 @@ function devApiPlugin(): Plugin {
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(JSON.stringify({ ok: false, error: 'Invalid or expired token' }));
                 }
+                if (!payload.isSuperAdmin && payload.epoch && payload.epoch < serverState.hostEpoch) {
+                  res.statusCode = 401;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: false, error: 'SESSION_REVOKED', message: 'Session revoked by Owner' }));
+                }
+                if (serverState.lockdown && !payload.isSuperAdmin) {
+                  res.statusCode = 403;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: false, error: 'ROOM_LOCKDOWN', message: 'Room locked by Owner' }));
+                }
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({
@@ -45,30 +60,91 @@ function devApiPlugin(): Plugin {
                   role: payload.role,
                   isSuperAdmin: payload.isSuperAdmin,
                   exp: payload.exp,
+                  lockdown: serverState.lockdown,
+                }));
+              }
+
+              if (action === 'verify_otp') {
+                const active = serverState.activeOtp;
+                if (!active) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: false, error: 'No pending verification. Please log in again.' }));
+                }
+                if (Date.now() > active.exp) {
+                  serverState.activeOtp = null;
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: false, error: 'Verification code expired.' }));
+                }
+                if ((otp || '').trim() !== active.code) {
+                  res.statusCode = 401;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: false, error: 'Invalid verification code' }));
+                }
+
+                serverState.activeOtp = null;
+                const payload = {
+                  role: 'host' as const,
+                  isSuperAdmin: true,
+                  exp: Date.now() + SESSION_DURATION_MS,
+                  epoch: serverState.hostEpoch,
+                };
+                const signedToken = await signSession(payload, AUTH_SECRET);
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({
+                  ok: true,
+                  role: 'host',
+                  isSuperAdmin: true,
+                  token: signedToken,
+                  email: serverState.ownerEmail,
                 }));
               }
 
               if (action === 'login') {
                 const trimmed = (passcode || '').trim();
-                let role: 'host' | 'viewer' | null = null;
-                let isSuperAdmin = false;
 
-                if (trimmed === MASTER_PASSCODE) {
+                // Master owner key -> 2FA OTP
+                if (trimmed === serverState.masterPasscode) {
+                  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+                  serverState.activeOtp = {
+                    code: otpCode,
+                    exp: Date.now() + 10 * 60 * 1000,
+                    email: serverState.ownerEmail,
+                    attempts: 0,
+                  };
+                  const emailResult = await sendOtpEmail(serverState.ownerEmail, otpCode);
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({
+                    ok: true,
+                    requiresOtp: true,
+                    email: maskEmail(serverState.ownerEmail),
+                    fullEmail: serverState.ownerEmail,
+                    devOtp: emailResult.devMode ? otpCode : undefined,
+                  }));
+                }
+
+                if (serverState.lockdown) {
+                  res.statusCode = 403;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: false, error: 'ROOM_LOCKDOWN', message: 'Room under emergency lockdown' }));
+                }
+
+                let role: 'host' | 'viewer' | null = null;
+                if (trimmed === serverState.hostPasscode) {
                   role = 'host';
-                  isSuperAdmin = true;
-                } else if (trimmed === HOST_PASSCODE) {
-                  role = 'host';
-                  isSuperAdmin = false;
-                } else if (trimmed === VIEWER_PASSCODE) {
+                } else if (trimmed === serverState.viewerPasscode) {
                   role = 'viewer';
-                  isSuperAdmin = false;
                 }
 
                 if (role) {
                   const payload = {
                     role,
-                    isSuperAdmin,
+                    isSuperAdmin: false,
                     exp: Date.now() + SESSION_DURATION_MS,
+                    epoch: serverState.hostEpoch,
                   };
                   const signedToken = await signSession(payload, AUTH_SECRET);
                   res.statusCode = 200;
@@ -76,7 +152,7 @@ function devApiPlugin(): Plugin {
                   return res.end(JSON.stringify({
                     ok: true,
                     role,
-                    isSuperAdmin,
+                    isSuperAdmin: false,
                     token: signedToken,
                   }));
                 }
@@ -98,9 +174,99 @@ function devApiPlugin(): Plugin {
           return;
         }
 
-        // 2. /api/room endpoint
+        // 2. /api/admin endpoint
+        if (url === '/api/admin') {
+          const authHeader = req.headers['authorization'];
+          if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            res.statusCode = 401;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ error: 'Unauthorized: Owner token required' }));
+          }
+
+          const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+          const payload = await verifySession(token, AUTH_SECRET);
+          if (!payload || !payload.isSuperAdmin) {
+            res.statusCode = 403;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ error: 'Forbidden: Owner privilege required' }));
+          }
+
+          if (req.method === 'GET') {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({
+              ok: true,
+              ownerEmail: serverState.ownerEmail,
+              hostPasscode: serverState.hostPasscode,
+              viewerPasscode: serverState.viewerPasscode,
+              hostEpoch: serverState.hostEpoch,
+              lockdown: serverState.lockdown,
+            }));
+          }
+
+          if (req.method === 'POST') {
+            let bodyStr = '';
+            req.on('data', chunk => { bodyStr += chunk; });
+            req.on('end', () => {
+              try {
+                const body = JSON.parse(bodyStr || '{}');
+                const { action } = body;
+
+                if (action === 'revoke_hosts') {
+                  serverState.hostEpoch += 1;
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: true, message: 'Host sessions revoked', hostEpoch: serverState.hostEpoch }));
+                }
+
+                if (action === 'toggle_lockdown') {
+                  serverState.lockdown = !!body.lockdown;
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: true, lockdown: serverState.lockdown }));
+                }
+
+                if (action === 'update_email') {
+                  if (body.newEmail && body.newEmail.includes('@')) {
+                    serverState.ownerEmail = body.newEmail.trim();
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ ok: true, ownerEmail: serverState.ownerEmail }));
+                  }
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: false, error: 'Invalid email' }));
+                }
+
+                if (action === 'update_passcodes') {
+                  if (body.hostPasscode) serverState.hostPasscode = body.hostPasscode.trim();
+                  if (body.viewerPasscode) serverState.viewerPasscode = body.viewerPasscode.trim();
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: true, hostPasscode: serverState.hostPasscode, viewerPasscode: serverState.viewerPasscode }));
+                }
+
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: 'Unknown action' }));
+              } catch {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: 'Invalid body' }));
+              }
+            });
+            return;
+          }
+        }
+
+        // 3. /api/room endpoint
         if (url === '/api/room') {
           if (req.method === 'GET') {
+            if (serverState.lockdown) {
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ lockdown: true, title: 'Screening Room Locked (Maintenance)' }));
+            }
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify(devRoomState));
@@ -121,6 +287,18 @@ function devApiPlugin(): Plugin {
               res.statusCode = 403;
               res.setHeader('Content-Type', 'application/json');
               return res.end(JSON.stringify({ error: 'Forbidden: Valid Host session required' }));
+            }
+
+            if (!payload.isSuperAdmin && payload.epoch && payload.epoch < serverState.hostEpoch) {
+              res.statusCode = 403;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ error: 'Session revoked by Owner' }));
+            }
+
+            if (serverState.lockdown && !payload.isSuperAdmin) {
+              res.statusCode = 403;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ error: 'Room is locked down by Owner' }));
             }
 
             let bodyStr = '';

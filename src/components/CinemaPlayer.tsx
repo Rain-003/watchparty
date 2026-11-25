@@ -21,6 +21,7 @@ import {
   Sparkles,
   AlertCircle,
   Shield,
+  ShieldAlert,
   Menu,
   X,
   PictureInPicture2
@@ -28,9 +29,10 @@ import {
 
 interface CinemaPlayerProps {
   onOpenSettings: () => void;
+  onOpenOwnerAdmin?: () => void;
 }
 
-export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) => {
+export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOpenOwnerAdmin }) => {
   const { settings, updateSettings, logout, isHost, isSuperAdmin } = useAuth();
   
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -559,6 +561,18 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
               </button>
             )}
 
+            {/* OWNER ONLY: Admin Command Center */}
+            {isSuperAdmin && (
+              <button
+                onClick={onOpenOwnerAdmin}
+                title="Owner Command Center & Breach Mitigation"
+                className="px-2.5 py-1.5 rounded-lg text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/20 transition-all flex items-center space-x-1.5 font-medium"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden lg:inline text-[11px] font-mono font-semibold">OWNER ADMIN</span>
+              </button>
+            )}
+
             {/* Exit / Logout */}
             <button
               onClick={logout}
@@ -674,6 +688,20 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings }) =>
               >
                 <Sliders className="w-3.5 h-3.5" />
                 <span>Open Host Control Room</span>
+              </button>
+            )}
+
+            {/* Owner Command Center if SuperAdmin */}
+            {isSuperAdmin && (
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  onOpenOwnerAdmin?.();
+                }}
+                className="w-full p-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 font-semibold text-xs transition-colors flex items-center justify-center space-x-2"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                <span>Owner Command Center</span>
               </button>
             )}
 
