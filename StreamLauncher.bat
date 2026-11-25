@@ -1,15 +1,21 @@
 @echo off
+cd /d "%~dp0"
 setlocal enabledelayedexpansion
 title Watchparty 1-Click Stream Controller
-
-:: Set console colors and UTF-8 encoding
 color 0E
-chcp 65001 >nul
+
+where node >nul 2>nul
+if errorlevel 1 (
+    echo [ERROR] Node.js is not installed or not in PATH.
+    echo Please install Node.js from https://nodejs.org/
+    pause
+    exit /b 1
+)
 
 :MENU
 cls
 echo =========================================================
-echo    🎬 WATCHPARTY 1-CLICK STREAM CONTROLLER
+echo    WATCHPARTY 1-CLICK STREAM CONTROLLER
 echo =========================================================
 echo.
 echo  [1] Instant Test Stream (Play sample video now)
@@ -19,6 +25,7 @@ echo  [4] Stream Custom URL Now
 echo  [5] Exit
 echo.
 echo =========================================================
+set "choice="
 set /p choice="Select an option (1-5): "
 
 if "%choice%"=="1" goto TEST_STREAM
@@ -30,7 +37,7 @@ goto MENU
 
 :TEST_STREAM
 cls
-echo [🎬 Launching Instant Test Stream...]
+echo [Launching Instant Test Stream...]
 node tools\autoStream.js --test
 echo.
 echo Press any key to return to menu...
@@ -40,7 +47,7 @@ goto MENU
 :LOGIN_IWANT
 cls
 echo =========================================================
-echo    🔑 1-TIME IWANT LOGIN SETUP
+echo    1-TIME IWANT LOGIN SETUP
 echo =========================================================
 echo.
 echo A dedicated browser window will open to iWantTFC.
@@ -61,10 +68,12 @@ goto MENU
 :SCHEDULE_STREAM
 cls
 echo =========================================================
-echo    ⏰ SCHEDULE A WATCHPARTY STREAM
+echo    SCHEDULE A WATCHPARTY STREAM
 echo =========================================================
 echo.
-set /p stream_url="Enter Stream URL (or press Enter for default/iWant): "
+set "stream_url="
+set "show_time="
+set /p stream_url="Enter Stream URL (or press Enter for test stream): "
 set /p show_time="Enter Showtime in 24-hr format (e.g. 20:30): "
 
 if "%show_time%"=="" (
@@ -87,9 +96,10 @@ goto MENU
 :STREAM_NOW
 cls
 echo =========================================================
-echo    ▶️ PLAY STREAM IMMEDIATELY
+echo    PLAY STREAM IMMEDIATELY
 echo =========================================================
 echo.
+set "stream_url="
 set /p stream_url="Enter Stream URL: "
 if "%stream_url%"=="" (
     node tools\autoStream.js --test
