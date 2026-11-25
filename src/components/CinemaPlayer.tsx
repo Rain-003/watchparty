@@ -493,13 +493,9 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
             )}
 
             <div className="min-w-0">
-              <h1 className="text-xs sm:text-sm font-semibold tracking-wide text-zinc-100 truncate max-w-[130px] xs:max-w-[180px] sm:max-w-[280px] md:max-w-md">
+              <h1 className="text-xs sm:text-sm font-semibold tracking-wide text-zinc-100 truncate max-w-[140px] xs:max-w-[220px] sm:max-w-[340px] md:max-w-md">
                 {settings.title}
               </h1>
-              <p className="text-[10px] sm:text-[11px] font-mono text-zinc-500 hidden sm:block truncate">
-                Source: <span className="text-zinc-300 font-semibold">{sourceType === 'hls' ? 'HLS Direct Feed' : 'Backup Embed'}</span>
-                {hlsStats?.resolution && sourceType === 'hls' && ` • ${hlsStats.resolution}`}
-              </p>
             </div>
           </div>
 
@@ -970,13 +966,6 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
         {/* Bottom Helper Bar */}
         <div className="mt-3 sm:mt-4 w-full flex flex-wrap items-center justify-between text-xs text-zinc-500 px-1 gap-2">
           <div className="flex items-center space-x-2 sm:space-x-3 flex-wrap gap-y-1">
-            <span className="font-mono text-[11px]">
-              Active: <span className="text-zinc-300 font-semibold">{sourceType.toUpperCase()}</span>
-            </span>
-            <span className="hidden sm:inline">•</span>
-            <span className="hidden sm:inline text-zinc-500">
-              Chatting in Discord • Fullscreen enabled
-            </span>
             {/* Floating Mini-Player Button */}
             <button
               type="button"
@@ -985,7 +974,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               title="Pop out into a floating Picture-in-Picture window"
             >
               <PictureInPicture2 className="w-3.5 h-3.5 text-amber-400" />
-              <span>Floating Screen</span>
+              <span>Mini Player</span>
             </button>
 
             {sourceType === 'embed' && (

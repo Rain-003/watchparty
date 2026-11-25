@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Lock, Eye, EyeOff, Film, ArrowRight, ShieldCheck, Loader2, KeyRound, ArrowLeft } from 'lucide-react';
+import { Lock, Eye, EyeOff, Film, ArrowRight, Loader2, KeyRound, ArrowLeft } from 'lucide-react';
 
 export const PasscodeGate: React.FC = () => {
   const { login, verifyOtp, settings } = useAuth();
@@ -15,7 +15,7 @@ export const PasscodeGate: React.FC = () => {
   const [otpStep, setOtpStep] = useState(false);
   const [otpCode, setOtpCode] = useState('');
 
-  const triggerError = (msg = 'Invalid passcode. Please check with your host.') => {
+  const triggerError = (msg = 'Invalid passcode.') => {
     setError(true);
     setErrorMessage(msg);
     setShake(true);
@@ -31,13 +31,10 @@ export const PasscodeGate: React.FC = () => {
 
     try {
       const res = await login(passcode);
-
-      // Triggered Owner 2FA OTP flow
       if (res.requiresOtp) {
         setOtpStep(true);
         return;
       }
-
       if (!res.success) {
         triggerError('Invalid passcode. Access denied.');
       }
@@ -56,7 +53,7 @@ export const PasscodeGate: React.FC = () => {
     try {
       const res = await verifyOtp(otpCode);
       if (!res.success) {
-        triggerError(res.error || 'Invalid verification code. Please try again.');
+        triggerError(res.error || 'Invalid code. Try again.');
       }
     } finally {
       setIsSubmitting(false);
@@ -75,47 +72,35 @@ export const PasscodeGate: React.FC = () => {
       {/* Subtle theater ambient backdrop */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[350px] bg-amber-500/[0.04] blur-[120px] rounded-full pointer-events-none" />
 
-      <div className={`relative w-full max-w-[420px] ${shake ? 'animate-shake' : ''}`}>
+      <div className={`relative w-full max-w-[380px] ${shake ? 'animate-shake' : ''}`}>
         {/* Screening Card */}
-        <div className="border border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl rounded-xl sm:rounded-2xl p-5 sm:p-7 shadow-2xl shadow-black/80">
+        <div className="border border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xl rounded-2xl p-6 sm:p-7 shadow-2xl shadow-black/80">
           
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-900 pb-4 sm:pb-5 mb-5 sm:mb-6 gap-2">
-            <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0 flex-1">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-amber-400 shrink-0">
-                {otpStep ? <KeyRound className="w-4 h-4 text-amber-400" /> : <Film className="w-4 h-4" />}
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-xs sm:text-sm font-semibold tracking-wide text-zinc-100 uppercase truncate max-w-[140px] xs:max-w-[190px] sm:max-w-none">
-                  {otpStep ? 'Security Gate' : settings.title}
-                </h1>
-                <p className="text-[10px] sm:text-[11px] font-mono text-zinc-500 uppercase tracking-wider truncate">
-                  {otpStep ? 'Verification Required' : 'Private Screening Room'}
-                </p>
-              </div>
+          <div className="flex items-center space-x-3 pb-5 mb-5 border-b border-zinc-900">
+            <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-amber-400 shrink-0">
+              {otpStep ? <KeyRound className="w-5 h-5" /> : <Film className="w-5 h-5" />}
             </div>
-
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 shrink-0">
-              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 animate-pulse ${otpStep ? 'bg-amber-400' : 'bg-emerald-500'}`} />
-              <span className="hidden xs:inline">{otpStep ? '2FA ' : 'PORTAL '}</span>{otpStep ? 'ACTIVE' : 'READY'}
-            </span>
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold tracking-wide text-zinc-100 uppercase truncate">
+                {otpStep ? 'Security Verification' : settings.title}
+              </h1>
+              <p className="text-[11px] text-zinc-500 truncate">
+                {otpStep ? 'Owner 2FA Gate' : 'Private Screening'}
+              </p>
+            </div>
           </div>
 
           {/* Form Content: Step 1 (Passcode) vs Step 2 (Owner OTP) */}
           {!otpStep ? (
             <form onSubmit={handlePasscodeSubmit} className="space-y-4">
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label 
-                    htmlFor="passcode-input"
-                    className="text-xs font-medium text-zinc-300 tracking-wide"
-                  >
-                    Passcode
-                  </label>
-                  <span className="text-[11px] font-mono text-zinc-500">
-                    Viewer or Host Access
-                  </span>
-                </div>
+                <label 
+                  htmlFor="passcode-input"
+                  className="block text-xs font-medium text-zinc-300 mb-1.5"
+                >
+                  Passcode
+                </label>
 
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500 group-focus-within:text-amber-400 transition-colors">
@@ -131,8 +116,8 @@ export const PasscodeGate: React.FC = () => {
                       if (error) setError(false);
                     }}
                     autoFocus
-                    placeholder="Enter passcode to enter..."
-                    className={`w-full pl-10 pr-10 py-3 bg-zinc-900/90 border rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all duration-200 ${
+                    placeholder="Enter passcode..."
+                    className={`w-full pl-10 pr-10 py-2.5 bg-zinc-900/90 border rounded-xl text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all duration-200 ${
                       error
                         ? 'border-red-500/80 ring-1 ring-red-500/30'
                         : 'border-zinc-800 focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20'
@@ -151,7 +136,7 @@ export const PasscodeGate: React.FC = () => {
                 {error && (
                   <p className="mt-2 text-xs text-red-400 flex items-center gap-1.5 font-medium">
                     <span className="w-1 h-1 rounded-full bg-red-400 inline-block" />
-                    {errorMessage || 'Invalid passcode. Please check with your host.'}
+                    {errorMessage}
                   </p>
                 )}
               </div>
@@ -159,7 +144,7 @@ export const PasscodeGate: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-3 px-4 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-sm rounded-xl transition-all duration-150 flex items-center justify-center space-x-2 group active:scale-[0.99] shadow-lg shadow-white/5 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full py-2.5 px-4 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-sm rounded-xl transition-all duration-150 flex items-center justify-center space-x-2 group active:scale-[0.99] shadow-lg shadow-white/5 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
                   <>
@@ -175,22 +160,12 @@ export const PasscodeGate: React.FC = () => {
               </button>
             </form>
           ) : (
-            /* STEP 2: 2FA VERIFICATION CODE ENTRY (CLEAN & STEALTH) */
+            /* STEP 2: 2FA VERIFICATION CODE ENTRY */
             <form onSubmit={handleOtpSubmit} className="space-y-4 animate-fade-in">
-              <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-xl space-y-1 text-left">
-                <span className="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Security Verification Required
-                </span>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">
-                  A verification code has been dispatched. Enter your code to continue:
-                </p>
-              </div>
-
               <div>
                 <label 
                   htmlFor="otp-input"
-                  className="block text-xs font-medium text-zinc-300 tracking-wide mb-1.5"
+                  className="block text-xs font-medium text-zinc-300 mb-1.5"
                 >
                   Enter Verification Code
                 </label>
@@ -210,7 +185,7 @@ export const PasscodeGate: React.FC = () => {
                     }}
                     autoFocus
                     placeholder="Enter code..."
-                    className={`w-full pl-10 pr-4 py-3 bg-zinc-900/90 border rounded-xl text-center text-sm font-mono tracking-[0.2em] text-amber-300 placeholder-zinc-700 focus:outline-none transition-all duration-200 ${
+                    className={`w-full pl-10 pr-4 py-2.5 bg-zinc-900/90 border rounded-xl text-center text-sm font-mono tracking-[0.2em] text-amber-300 placeholder-zinc-700 focus:outline-none transition-all duration-200 ${
                       error
                         ? 'border-red-500/80 ring-1 ring-red-500/30'
                         : 'border-zinc-800 focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20'
@@ -221,7 +196,7 @@ export const PasscodeGate: React.FC = () => {
                 {error && (
                   <p className="mt-2 text-xs text-red-400 flex items-center gap-1.5 font-medium">
                     <span className="w-1 h-1 rounded-full bg-red-400 inline-block" />
-                    {errorMessage || 'Invalid verification code.'}
+                    {errorMessage}
                   </p>
                 )}
               </div>
@@ -230,7 +205,7 @@ export const PasscodeGate: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting || !otpCode.trim()}
-                  className="w-full py-3 px-4 bg-amber-400 hover:bg-amber-300 text-zinc-950 font-semibold text-sm rounded-xl transition-all duration-150 flex items-center justify-center space-x-2 group active:scale-[0.99] shadow-lg shadow-amber-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-zinc-950 font-semibold text-sm rounded-xl transition-all duration-150 flex items-center justify-center space-x-2 group active:scale-[0.99] shadow-lg shadow-amber-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
                     <>
@@ -239,7 +214,7 @@ export const PasscodeGate: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <span>Verify & Enter Command Center</span>
+                      <span>Verify & Enter</span>
                       <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                     </>
                   )}
@@ -248,31 +223,15 @@ export const PasscodeGate: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleBackToPasscode}
-                  className="w-full py-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-1"
+                  className="w-full py-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-1"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  Back to Passcode Entry
+                  Back
                 </button>
               </div>
             </form>
           )}
-
-          {/* Footer note */}
-          <div className="mt-6 pt-4 border-t border-zinc-900/80 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              Cryptographically Protected
-            </span>
-            <span className="text-zinc-600">
-              Stealth Verification
-            </span>
-          </div>
         </div>
-
-        {/* Ambient bottom caption */}
-        <p className="text-center text-[11px] text-zinc-600 mt-4 tracking-wider uppercase font-mono">
-          Direct Video Pipeline • Zero Distraction
-        </p>
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ interface AdminState {
   viewerPasscode: string;
   hostEpoch: number;
   lockdown: boolean;
+  supabaseConnected?: boolean;
 }
 
 export const OwnerAdminModal: React.FC<OwnerAdminModalProps> = ({ isOpen, onClose }) => {
@@ -253,26 +254,35 @@ export const OwnerAdminModal: React.FC<OwnerAdminModalProps> = ({ isOpen, onClos
         {/* Scrollable Content */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-6">
           {/* Telemetry Stat Bar */}
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-3 p-3 bg-zinc-900/60 border border-zinc-800/80 rounded-xl text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-zinc-900/60 border border-zinc-800/80 rounded-xl text-center">
             <div>
-              <span className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500">Security Epoch</span>
-              <span className="text-xs sm:text-sm font-mono font-semibold text-zinc-200">
-                Cycle #{adminState?.hostEpoch || 1}
+              <span className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500">Database</span>
+              <span className={`text-xs font-mono font-semibold flex items-center justify-center gap-1 ${
+                adminState?.supabaseConnected ? 'text-emerald-400' : 'text-amber-400'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${adminState?.supabaseConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                {adminState?.supabaseConnected ? 'SUPABASE' : 'FALLBACK'}
               </span>
             </div>
             <div>
               <span className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500">Room Status</span>
-              <span className={`text-xs sm:text-sm font-semibold ${
+              <span className={`text-xs font-semibold ${
                 adminState?.lockdown ? 'text-red-400' : 'text-emerald-400'
               }`}>
-                {adminState?.lockdown ? 'LOCKED DOWN' : 'OPERATIONAL'}
+                {adminState?.lockdown ? 'LOCKED DOWN' : 'ACTIVE'}
               </span>
             </div>
             <div>
-              <span className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500">2FA Protected</span>
-              <span className="text-xs sm:text-sm font-semibold text-amber-400 flex items-center justify-center gap-1">
+              <span className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500">Session Epoch</span>
+              <span className="text-xs font-mono font-semibold text-zinc-200">
+                Cycle #{adminState?.hostEpoch || 1}
+              </span>
+            </div>
+            <div>
+              <span className="block text-[10px] uppercase font-mono tracking-wider text-zinc-500">Security</span>
+              <span className="text-xs font-semibold text-amber-400 flex items-center justify-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                ACTIVE
+                2FA ARMED
               </span>
             </div>
           </div>

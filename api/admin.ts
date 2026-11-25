@@ -53,6 +53,7 @@ export default async function handler(req: Request): Promise<Response> {
       viewerPasscode: activeViewerPasscode,
       hostEpoch: currentHostEpoch,
       lockdown: isLockedDown,
+      supabaseConnected: !!dbSec || !!dbRoom,
     }), { status: 200, headers });
   }
 
