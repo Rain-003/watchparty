@@ -42,6 +42,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const isExplicitlyPausedRef = useRef<boolean>(false);
 
   const [sourceType, setSourceType] = useState<StreamSourceType>(() => {
     return getStreamFromUrl() ? 'embed' : 'hls';
@@ -87,6 +88,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
         }, 1200);
       }
     } else if (msg.type === 'PLAY') {
+      isExplicitlyPausedRef.current = false;
       setIsPlaying(true);
       if ((sourceType === 'hls' || sourceType === 'webrtc') && videoRef.current) {
         videoRef.current.play().catch(() => {
@@ -104,6 +106,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
         );
       }
     } else if (msg.type === 'PAUSE') {
+      isExplicitlyPausedRef.current = true;
       setIsPlaying(false);
       if ((sourceType === 'hls' || sourceType === 'webrtc') && videoRef.current) {
         videoRef.current.pause();
@@ -220,15 +223,13 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
     }
   }, [sourceType, isHost, localStream, remoteStream, isMuted, volume]);
 
-  // Auto-resume playback whenever the viewer's tab regains focus or visibility
+  // Auto-resume & keep-alive playback whenever the viewer's tab changes focus or visibility
   useEffect(() => {
-    const handleFocusResume = () => {
-      if (sourceType === 'hls' || sourceType === 'webrtc') {
-        if (videoRef.current && videoRef.current.paused) {
+    const handleKeepAlive = () => {
+      if (!isExplicitlyPausedRef.current) {
+        if ((sourceType === 'hls' || sourceType === 'webrtc') && videoRef.current && videoRef.current.paused) {
           videoRef.current.play().catch(() => {});
-        }
-      } else if (sourceType === 'embed') {
-        if (iframeRef.current?.contentWindow) {
+        } else if (sourceType === 'embed' && iframeRef.current?.contentWindow) {
           iframeRef.current.contentWindow.postMessage(
             JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
             '*'
@@ -237,17 +238,13 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        handleFocusResume();
-      }
-    };
-
-    window.addEventListener('focus', handleFocusResume);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleKeepAlive);
+    window.addEventListener('blur', handleKeepAlive);
+    document.addEventListener('visibilitychange', handleKeepAlive);
     return () => {
-      window.removeEventListener('focus', handleFocusResume);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleKeepAlive);
+      window.removeEventListener('blur', handleKeepAlive);
+      document.removeEventListener('visibilitychange', handleKeepAlive);
     };
   }, [sourceType]);
 
@@ -261,10 +258,26 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
           // YouTube: 1 = PLAYING, 2 = PAUSED
           if (payload.info === 1) {
             setIsPlaying(true);
+            isExplicitlyPausedRef.current = false;
             if (isHost) {
               broadcast({ type: 'PLAY', currentTime: payload.currentTime });
             }
           } else if (payload.info === 2) {
+            // Check if user explicitly paused, or if YouTube auto-paused because window lost focus
+            if (!isExplicitlyPausedRef.current) {
+              // Window lost focus or user switched apps: counter YouTube's auto-pause!
+              setTimeout(() => {
+                if (!isExplicitlyPausedRef.current && iframeRef.current?.contentWindow) {
+                  iframeRef.current.contentWindow.postMessage(
+                    JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+                    '*'
+                  );
+                }
+              }, 120);
+              // Do NOT broadcast pause to viewers when host simply tabs out
+              return;
+            }
+
             setIsPlaying(false);
             if (isHost) {
               broadcast({ type: 'PAUSE', currentTime: payload.currentTime });
@@ -468,15 +481,18 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
     if (sourceType === 'hls' || sourceType === 'webrtc') {
       if (!videoRef.current) return;
       if (videoRef.current.paused) {
+        isExplicitlyPausedRef.current = false;
         videoRef.current.play();
         if (isHost && sourceType === 'hls') broadcast({ type: 'PLAY', currentTime: videoRef.current.currentTime });
       } else {
+        isExplicitlyPausedRef.current = true;
         videoRef.current.pause();
         if (isHost && sourceType === 'hls') broadcast({ type: 'PAUSE', currentTime: videoRef.current.currentTime });
       }
     } else if (sourceType === 'embed') {
       if (iframeRef.current?.contentWindow) {
         if (isPlaying) {
+          isExplicitlyPausedRef.current = true;
           iframeRef.current.contentWindow.postMessage(
             JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
             '*'
@@ -484,6 +500,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
           setIsPlaying(false);
           if (isHost) broadcast({ type: 'PAUSE' });
         } else {
+          isExplicitlyPausedRef.current = false;
           iframeRef.current.contentWindow.postMessage(
             JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
             '*'
