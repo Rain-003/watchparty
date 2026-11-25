@@ -459,6 +459,12 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
   });
 
   const togglePlay = () => {
+    // If the video is playing but was muted by browser autoplay, clicking it should unmute sound first!
+    if (isMuted && isPlaying && !isHost) {
+      toggleMute();
+      return;
+    }
+
     if (sourceType === 'hls' || sourceType === 'webrtc') {
       if (!videoRef.current) return;
       if (videoRef.current.paused) {
@@ -666,6 +672,16 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               <Sparkles className="w-4 h-4" />
             </button>
 
+            {/* Floating Mini-Player (Picture-in-Picture) */}
+            <button
+              onClick={handleOpenFloatingPlayer}
+              title="Float stream over Discord and games (Picture-in-Picture)"
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-amber-300 hover:text-amber-200 border border-zinc-800 hover:border-amber-500/30 transition-all shadow-sm"
+            >
+              <PictureInPicture2 className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Mini-Player</span>
+            </button>
+
             {/* HOST ONLY: Screen / Tab Relay Button (Zero Added Views) */}
             {isHost && (
               <button
@@ -830,6 +846,18 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               </button>
             </div>
 
+            {/* Floating Mini-Player in Mobile Drawer */}
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                handleOpenFloatingPlayer();
+              }}
+              className="w-full p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-amber-500/40 text-amber-300 font-semibold text-xs transition-colors flex items-center justify-center space-x-2"
+            >
+              <PictureInPicture2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Floating Mini-Player (Picture-in-Picture)</span>
+            </button>
+
             {/* Host Screen Relay in Mobile Drawer */}
             {isHost && (
               <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-900/60 border border-zinc-800">
@@ -951,6 +979,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
                 playsInline
                 muted={isHost && sourceType === 'webrtc' ? true : isMuted}
                 onClick={togglePlay}
+                onDoubleClick={toggleFullscreen}
                 onPlay={() => {
                   setIsPlaying(true);
                   if (isHost && videoRef.current && sourceType === 'hls') {
@@ -1040,12 +1069,12 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               )}
 
               {/* Unmute prompt for browser autoplay policies */}
-              {isMuted && isPlaying && (
+              {isMuted && isPlaying && !isHost && (
                 <button
                   onClick={toggleMute}
-                  className="absolute top-4 right-4 z-30 px-3 py-1.5 bg-zinc-900/90 hover:bg-zinc-800 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-medium backdrop-blur-md flex items-center space-x-1.5 shadow-lg transition-all animate-bounce"
+                  className="absolute top-4 right-4 z-30 px-3.5 py-2 bg-zinc-950/95 hover:bg-zinc-900 text-amber-400 border border-amber-500/40 rounded-xl text-xs font-semibold backdrop-blur-md flex items-center space-x-2 shadow-xl shadow-black/80 transition-all animate-bounce hover:scale-105 active:scale-95"
                 >
-                  <VolumeX className="w-4 h-4" />
+                  <VolumeX className="w-4 h-4 text-amber-400" />
                   <span>Click to unmute</span>
                 </button>
               )}
