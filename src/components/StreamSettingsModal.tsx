@@ -43,7 +43,11 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
           discordUrl: liveData.discordUrl !== undefined ? (liveData.discordUrl || '') : prev.discordUrl,
           viewerPasscode: (liveData as any).viewerPasscode || prev.viewerPasscode,
           hostPasscode: (liveData as any).hostPasscode || prev.hostPasscode,
-          scheduledTime: liveData.scheduledTime || prev.scheduledTime,
+          scheduledTime: liveData.scheduledTime
+            ? (/^\d{1,2}:\d{2}$/.test(liveData.scheduledTime)
+                ? liveData.scheduledTime
+                : new Date(liveData.scheduledTime).toTimeString().slice(0, 5))
+            : prev.scheduledTime,
           scheduledTitle: liveData.scheduledTitle || prev.scheduledTitle,
           scheduledUrl: liveData.scheduledUrl || prev.scheduledUrl,
         }));
@@ -65,14 +69,33 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
     await updateSettings({ scheduledTime: null, scheduledTitle: null, scheduledUrl: null });
   };
 
+  const resolveScheduledIso = (rawTime: string): string | null => {
+    const trimmed = rawTime.trim();
+    if (!trimmed) return null;
+    if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+      const [h, m] = trimmed.split(':').map(Number);
+      const target = new Date();
+      target.setHours(h, m, 0, 0);
+      // If that HH:MM already passed today, schedule it for tomorrow so it doesn't fire immediately
+      if (target.getTime() <= Date.now()) {
+        target.setDate(target.getDate() + 1);
+      }
+      return target.toISOString();
+    }
+    return trimmed;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    const rawScheduledUrl = formData.scheduledUrl.trim();
     const formattedData = {
       ...formData,
       embedUrl: formatEmbedUrl(formData.embedUrl),
-      scheduledUrl: formData.scheduledUrl ? formatEmbedUrl(formData.scheduledUrl) : null,
-      scheduledTime: formData.scheduledTime.trim() || null,
+      scheduledUrl: rawScheduledUrl
+        ? (rawScheduledUrl.includes('.m3u8') ? rawScheduledUrl : formatEmbedUrl(rawScheduledUrl))
+        : null,
+      scheduledTime: resolveScheduledIso(formData.scheduledTime),
       scheduledTitle: formData.scheduledTitle.trim() || null,
     };
     await updateSettings(formattedData);

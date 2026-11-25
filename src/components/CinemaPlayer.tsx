@@ -91,10 +91,18 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
       if (diff <= 0) {
         // Showtime arrived!
         setCountdownText(null);
-        if (settings.scheduledUrl && settings.scheduledUrl !== settings.embedUrl) {
+        if (settings.scheduledUrl) {
+          const isHls = settings.scheduledUrl.includes('.m3u8');
+          setSourceType(isHls ? 'hls' : 'embed');
           updateSettings({
-            embedUrl: settings.scheduledUrl,
+            ...(isHls ? { hlsUrl: settings.scheduledUrl } : { embedUrl: settings.scheduledUrl }),
             title: settings.scheduledTitle || settings.title,
+            scheduledTime: null,
+            scheduledTitle: null,
+            scheduledUrl: null,
+          });
+        } else {
+          updateSettings({
             scheduledTime: null,
             scheduledTitle: null,
             scheduledUrl: null,
@@ -218,11 +226,20 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
 
     const unsubscribe = subscribeToRoomRealtime((newRoom) => {
       if (!newRoom) return;
-      if (newRoom.backup_embed_url && newRoom.backup_embed_url !== settings.embedUrl) {
+      const hasStreamChange = newRoom.backup_embed_url && newRoom.backup_embed_url !== settings.embedUrl;
+      const hasScheduleChange =
+        newRoom.scheduled_time !== settings.scheduledTime ||
+        newRoom.scheduled_title !== settings.scheduledTitle ||
+        newRoom.scheduled_url !== settings.scheduledUrl;
+
+      if (hasStreamChange || hasScheduleChange) {
         updateSettings({
-          embedUrl: newRoom.backup_embed_url,
+          embedUrl: newRoom.backup_embed_url || settings.embedUrl,
           title: newRoom.title || settings.title,
           hlsUrl: newRoom.primary_hls_url || settings.hlsUrl,
+          scheduledTime: newRoom.scheduled_time ?? null,
+          scheduledTitle: newRoom.scheduled_title ?? null,
+          scheduledUrl: newRoom.scheduled_url ?? null,
         });
       }
     });
@@ -230,7 +247,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
     return () => {
       unsubscribe();
     };
-  }, [isHost, settings.embedUrl, settings.title, settings.hlsUrl, updateSettings]);
+  }, [isHost, settings.embedUrl, settings.title, settings.hlsUrl, settings.scheduledTime, settings.scheduledTitle, settings.scheduledUrl, updateSettings]);
 
   // Provide state to newly connected viewers
   const getLatestState = useCallback(() => {

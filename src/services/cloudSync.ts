@@ -15,6 +15,11 @@ export async function pushStreamToCloud(settings: StreamSettings, token?: string
       discordUrl: settings.discordUrl,
       autoPlay: settings.autoPlay,
       ambientGlow: settings.ambientGlow,
+      scheduledTime: settings.scheduledTime ?? null,
+      scheduledTitle: settings.scheduledTitle ?? null,
+      scheduledUrl: settings.scheduledUrl ?? null,
+      announceToDiscord: !!settings.announceToDiscord,
+      customAnnouncement: settings.customAnnouncement ?? null,
       updatedAt: Date.now(),
     };
 
