@@ -349,7 +349,7 @@ export const OwnerAdminModal: React.FC<OwnerAdminModalProps> = ({ isOpen, onClos
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="e.g. wrainmacalindong@gmail.com"
+                  placeholder="e.g. admin@yourdomain.com"
                   className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500/60"
                 />
                 <button

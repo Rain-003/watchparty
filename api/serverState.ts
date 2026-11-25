@@ -18,19 +18,20 @@ export interface ServerState {
   } | null;
 }
 
+// In production on Vercel, these MUST be set in Vercel Environment Variables.
+// Generic fallback placeholders are used here so no personal secrets are exposed in public Git repositories.
 export const serverState: ServerState = {
-  ownerEmail: process.env.OWNER_EMAIL || 'wrainmacalindong@gmail.com',
-  masterPasscode: process.env.MASTER_PASSCODE || 'wRain1234',
-  // Master emergency recovery OTP: if email is delayed or fails, this ALWAYS grants Owner access
-  masterRecoveryOtp: process.env.MASTER_RECOVERY_OTP || '999000',
-  hostPasscode: process.env.HOST_PASSCODE || 'party-host',
-  viewerPasscode: process.env.VIEWER_PASSCODE || 'watchparty',
+  ownerEmail: process.env.OWNER_EMAIL || '',
+  masterPasscode: process.env.MASTER_PASSCODE || 'change-me-in-vercel-env',
+  masterRecoveryOtp: process.env.MASTER_RECOVERY_OTP || '',
+  hostPasscode: process.env.HOST_PASSCODE || 'change-me-in-vercel-env',
+  viewerPasscode: process.env.VIEWER_PASSCODE || 'change-me-in-vercel-env',
   hostEpoch: 1,
   lockdown: false,
   activeOtp: null,
 };
 
-export const AUTH_SECRET = process.env.AUTH_SECRET || 'watchparty-vault-secret-key-32chars!!';
+export const AUTH_SECRET = process.env.AUTH_SECRET || 'fallback-secret-replace-in-vercel-env';
 
 /**
  * Sends a real email via Resend if RESEND_API_KEY is configured.
@@ -57,7 +58,7 @@ export async function sendOtpEmail(email: string, otp: string): Promise<{ sent: 
 
   // 2. Dispatch via Resend API if API key is present
   const apiKey = process.env.RESEND_API_KEY;
-  if (apiKey) {
+  if (apiKey && email) {
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -88,8 +89,6 @@ export async function sendOtpEmail(email: string, otp: string): Promise<{ sent: 
     } catch (err) {
       console.error('Failed to dispatch OTP email via Resend:', err);
     }
-  } else {
-    console.log(`[WATCHPARTY DEV OTP] To: ${email} | Code: ${otp} | Backup Code: ${serverState.masterRecoveryOtp}`);
   }
 
   return { sent: emailSent, devMode: !apiKey };
