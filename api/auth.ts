@@ -59,6 +59,11 @@ export default async function handler(req: Request): Promise<Response> {
         return new Response(JSON.stringify({ ok: false, error: 'SESSION_REVOKED', message: 'Session revoked by Owner' }), { status: 401, headers });
       }
 
+      // Check if this specific host device was individually revoked
+      if (payload.hostId && serverState.revokedHostIds.includes(payload.hostId)) {
+        return new Response(JSON.stringify({ ok: false, error: 'HOST_REVOKED', message: 'This host device access was revoked by the Owner' }), { status: 403, headers });
+      }
+
       // Check if room is in lockdown mode (Owner is exempt)
       if (isLockedDown && !payload.isSuperAdmin) {
         return new Response(JSON.stringify({ ok: false, error: 'ROOM_LOCKDOWN', message: 'Room locked by Owner' }), { status: 403, headers });
@@ -128,7 +133,51 @@ export default async function handler(req: Request): Promise<Response> {
       }), { status: 200, headers });
     }
 
-    // 3. Login with passcode
+    // 3. Claim 1-Time Host Invite / Authorization
+    if (action === 'claim_host') {
+      const { grantCode } = body;
+      if (!grantCode || typeof grantCode !== 'string') {
+        return new Response(JSON.stringify({ ok: false, error: 'Grant code required' }), { status: 400, headers });
+      }
+
+      const cleanCode = grantCode.trim().toUpperCase();
+      const grant = serverState.hostGrants.find(
+        g => g.code.toUpperCase() === cleanCode && !g.claimed && !g.revoked
+      );
+
+      if (!grant) {
+        return new Response(JSON.stringify({
+          ok: false,
+          error: 'INVALID_GRANT',
+          message: 'This host invite link is invalid, expired, or has already been claimed.',
+        }), { status: 400, headers });
+      }
+
+      // Mark invite as redeemed/burned
+      grant.claimed = true;
+      grant.claimedAt = Date.now();
+
+      // Issue 1-year persistent Host Device token
+      const payload = {
+        role: 'host' as const,
+        isSuperAdmin: false,
+        hostId: grant.id,
+        exp: Date.now() + 365 * 24 * 60 * 60 * 1000,
+        epoch: activeHostEpoch,
+      };
+
+      const signedToken = await signSession(payload, AUTH_SECRET);
+
+      return new Response(JSON.stringify({
+        ok: true,
+        role: 'host',
+        token: signedToken,
+        hostId: grant.id,
+        message: 'Host authorization granted! You now have permanent host access on this device.',
+      }), { status: 200, headers });
+    }
+
+    // 4. Login with passcode or host grant code
     if (action === 'login') {
       if (!passcode || typeof passcode !== 'string') {
         return new Response(JSON.stringify({ ok: false, error: 'Passcode required' }), { status: 400, headers });
@@ -147,12 +196,40 @@ export default async function handler(req: Request): Promise<Response> {
         };
 
         // Dispatch email to owner in background
-        await sendOtpEmail(activeOwnerEmail, otpCode);
+        const otpResult = await sendOtpEmail(activeOwnerEmail, otpCode);
 
-        // Stealth response: Never reveal the email address or OTP in client responses
         return new Response(JSON.stringify({
           ok: true,
           requiresOtp: true,
+          emailSent: otpResult.sent,
+          deliveryNotice: otpResult.sent
+            ? `Verification code dispatched to ${activeOwnerEmail.replace(/^(.{2})(.*)(@.*)$/, '$1***$3')}.`
+            : `Notice: Email delivery could not complete. You can enter your Master Passcode as the emergency bypass code.`,
+        }), { status: 200, headers });
+      }
+
+      // Check if user entered an unconsumed 1-time host grant code directly into the passcode box
+      const grant = serverState.hostGrants.find(
+        g => g.code.toUpperCase() === trimmed.toUpperCase() && !g.claimed && !g.revoked
+      );
+      if (grant) {
+        grant.claimed = true;
+        grant.claimedAt = Date.now();
+
+        const payload = {
+          role: 'host' as const,
+          isSuperAdmin: false,
+          hostId: grant.id,
+          exp: Date.now() + 365 * 24 * 60 * 60 * 1000,
+          epoch: activeHostEpoch,
+        };
+        const signedToken = await signSession(payload, AUTH_SECRET);
+        return new Response(JSON.stringify({
+          ok: true,
+          role: 'host',
+          isSuperAdmin: false,
+          token: signedToken,
+          message: 'Host grant claimed successfully!',
         }), { status: 200, headers });
       }
 

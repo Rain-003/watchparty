@@ -14,6 +14,7 @@ export const PasscodeGate: React.FC = () => {
   // 2FA OTP State
   const [otpStep, setOtpStep] = useState(false);
   const [otpCode, setOtpCode] = useState('');
+  const [otpNotice, setOtpNotice] = useState<string | null>(null);
 
   const triggerError = (msg = 'Invalid passcode.') => {
     setError(true);
@@ -33,6 +34,9 @@ export const PasscodeGate: React.FC = () => {
       const res = await login(passcode);
       if (res.requiresOtp) {
         setOtpStep(true);
+        if (res.deliveryNotice) {
+          setOtpNotice(res.deliveryNotice);
+        }
         return;
       }
       if (!res.success) {
@@ -162,12 +166,18 @@ export const PasscodeGate: React.FC = () => {
           ) : (
             /* STEP 2: 2FA VERIFICATION CODE ENTRY */
             <form onSubmit={handleOtpSubmit} className="space-y-4 animate-fade-in">
+              {otpNotice && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-xs leading-relaxed">
+                  {otpNotice}
+                </div>
+              )}
+
               <div>
                 <label 
                   htmlFor="otp-input"
                   className="block text-xs font-medium text-zinc-300 mb-1.5"
                 >
-                  Enter Verification Code
+                  Enter Verification Code (or Master Key)
                 </label>
 
                 <div className="relative group">
@@ -184,8 +194,8 @@ export const PasscodeGate: React.FC = () => {
                       if (error) setError(false);
                     }}
                     autoFocus
-                    placeholder="Enter code..."
-                    className={`w-full pl-10 pr-4 py-2.5 bg-zinc-900/90 border rounded-xl text-center text-sm font-mono tracking-[0.2em] text-amber-300 placeholder-zinc-700 focus:outline-none transition-all duration-200 ${
+                    placeholder="6-digit code or Master Key..."
+                    className={`w-full pl-10 pr-4 py-2.5 bg-zinc-900/90 border rounded-xl text-center text-sm font-mono tracking-[0.1em] text-amber-300 placeholder-zinc-700 focus:outline-none transition-all duration-200 ${
                       error
                         ? 'border-red-500/80 ring-1 ring-red-500/30'
                         : 'border-zinc-800 focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20'

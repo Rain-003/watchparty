@@ -53,6 +53,7 @@ export default async function handler(req: Request): Promise<Response> {
       viewerPasscode: activeViewerPasscode,
       hostEpoch: currentHostEpoch,
       lockdown: isLockedDown,
+      hostGrants: serverState.hostGrants,
       supabaseConnected: !!dbSec || !!dbRoom,
     }), { status: 200, headers });
   }
@@ -126,6 +127,48 @@ export default async function handler(req: Request): Promise<Response> {
           message: 'Passcodes updated successfully',
           hostPasscode: serverState.hostPasscode,
           viewerPasscode: serverState.viewerPasscode,
+        }), { status: 200, headers });
+      }
+
+      // 5. Generate 1-time Host invite code / grant link
+      if (action === 'generate_host_grant') {
+        const randChars = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const code = `HOST-${randChars}`;
+        const grant = {
+          id: `grant_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          code,
+          createdAt: Date.now(),
+          claimed: false,
+        };
+        serverState.hostGrants.push(grant);
+
+        return new Response(JSON.stringify({
+          ok: true,
+          grant,
+          message: '1-time host invite code created successfully',
+        }), { status: 200, headers });
+      }
+
+      // 6. Revoke an individual host grant / device
+      if (action === 'revoke_host_grant') {
+        const { grantId } = body;
+        if (!grantId || typeof grantId !== 'string') {
+          return new Response(JSON.stringify({ ok: false, error: 'Grant ID required' }), { status: 400, headers });
+        }
+
+        const grant = serverState.hostGrants.find(g => g.id === grantId);
+        if (grant) {
+          grant.revoked = true;
+        }
+
+        if (!serverState.revokedHostIds.includes(grantId)) {
+          serverState.revokedHostIds.push(grantId);
+        }
+
+        return new Response(JSON.stringify({
+          ok: true,
+          message: 'Host authorization revoked successfully',
+          revokedId: grantId,
         }), { status: 200, headers });
       }
 

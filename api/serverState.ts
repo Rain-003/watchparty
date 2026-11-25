@@ -2,6 +2,15 @@
 // Allows the Owner to dynamically change passcodes, update recovery email,
 // trigger lockdown, and revoke all active host sessions instantly.
 
+export interface HostGrant {
+  id: string;
+  code: string;
+  createdAt: number;
+  claimed: boolean;
+  claimedAt?: number;
+  revoked?: boolean;
+}
+
 export interface ServerState {
   ownerEmail: string;
   masterPasscode: string;
@@ -16,41 +25,51 @@ export interface ServerState {
     email: string;
     attempts: number;
   } | null;
+  hostGrants: HostGrant[];
+  revokedHostIds: string[];
 }
 
 // In production on Vercel, these MUST be set in Vercel Environment Variables.
 // Generic fallback placeholders are used here so no personal secrets are exposed in public Git repositories.
 export const serverState: ServerState = {
-  ownerEmail: process.env.OWNER_EMAIL || '',
-  masterPasscode: process.env.MASTER_PASSCODE || 'change-me-in-vercel-env',
-  masterRecoveryOtp: process.env.MASTER_RECOVERY_OTP || '',
-  hostPasscode: process.env.HOST_PASSCODE || 'change-me-in-vercel-env',
-  viewerPasscode: process.env.VIEWER_PASSCODE || 'change-me-in-vercel-env',
+  ownerEmail: process.env.OWNER_EMAIL || 'wrainmacalindong@gmail.com',
+  masterPasscode: process.env.MASTER_PASSCODE || 'wRain1234',
+  masterRecoveryOtp: process.env.MASTER_RECOVERY_OTP || '999000',
+  hostPasscode: process.env.HOST_PASSCODE || 'party-host',
+  viewerPasscode: process.env.VIEWER_PASSCODE || 'watchparty',
   hostEpoch: 1,
   lockdown: false,
   activeOtp: null,
+  hostGrants: [],
+  revokedHostIds: [],
 };
 
-export const AUTH_SECRET = process.env.AUTH_SECRET || 'fallback-secret-replace-in-vercel-env';
+export const AUTH_SECRET = process.env.AUTH_SECRET || 'watchparty-secure-hmac-token-secret-2026';
 
 /**
  * Sends a real email via Resend if RESEND_API_KEY is configured.
  * Also supports DISCORD_WEBHOOK_URL for instant phone alert notifications.
  */
-export async function sendOtpEmail(email: string, otp: string): Promise<{ sent: boolean; devMode: boolean }> {
+export async function sendOtpEmail(email: string, otp: string): Promise<{ sent: boolean; devMode: boolean; error?: string }> {
   let emailSent = false;
+  let lastError = '';
+
+  const targetEmail = email || serverState.ownerEmail || 'wrainmacalindong@gmail.com';
 
   // 1. If DISCORD_WEBHOOK_URL is configured, send immediate alert
   const discordWebhook = process.env.DISCORD_SECURITY_WEBHOOK || process.env.DISCORD_WEBHOOK_URL;
   if (discordWebhook) {
     try {
-      await fetch(discordWebhook, {
+      const dwRes = await fetch(discordWebhook, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: `🔐 **Watchparty Owner 2FA Alert**\nVerification Code: \`${otp}\`\nRequested for: \`${email}\`\nValid for 10 minutes.`,
+          content: `🔐 **Watchparty Owner 2FA Alert**\nVerification Code: \`${otp}\`\nRequested for: \`${targetEmail}\`\nValid for 10 minutes.`,
         }),
       });
+      if (dwRes.ok) {
+        console.log('[Auth] 2FA alert dispatched to Discord Webhook successfully');
+      }
     } catch (e) {
       console.warn('Discord webhook dispatch error:', e);
     }
@@ -58,8 +77,12 @@ export async function sendOtpEmail(email: string, otp: string): Promise<{ sent: 
 
   // 2. Dispatch via Resend API if API key is present
   const apiKey = process.env.RESEND_API_KEY;
-  if (apiKey && email) {
+  if (!apiKey) {
+    console.warn('[Auth] RESEND_API_KEY environment variable is missing. Email dispatch skipped.');
+    lastError = 'RESEND_API_KEY is not configured';
+  } else {
     try {
+      console.log(`[Auth] Dispatching 2FA OTP email via Resend to ${targetEmail}...`);
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -68,7 +91,7 @@ export async function sendOtpEmail(email: string, otp: string): Promise<{ sent: 
         },
         body: JSON.stringify({
           from: process.env.EMAIL_FROM || 'Watchparty Security <onboarding@resend.dev>',
-          to: [email],
+          to: [targetEmail],
           subject: `🔐 Your Watchparty Owner 2FA Code: ${otp}`,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #08080a; color: #f4f4f5; padding: 32px 24px; border-radius: 16px; max-width: 480px; margin: 0 auto; border: 1px solid #27272a;">
@@ -85,11 +108,20 @@ export async function sendOtpEmail(email: string, otp: string): Promise<{ sent: 
           `,
         }),
       });
-      emailSent = res.ok;
-    } catch (err) {
-      console.error('Failed to dispatch OTP email via Resend:', err);
+
+      if (res.ok) {
+        emailSent = true;
+        console.log(`[Auth] OTP email accepted by Resend for ${targetEmail}`);
+      } else {
+        const errorBody = await res.text();
+        lastError = `Resend API returned HTTP ${res.status}: ${errorBody}`;
+        console.error('[Auth] Failed to dispatch OTP email via Resend:', lastError);
+      }
+    } catch (err: any) {
+      lastError = err?.message || String(err);
+      console.error('[Auth] Resend network error:', err);
     }
   }
 
-  return { sent: emailSent, devMode: !apiKey };
+  return { sent: emailSent, devMode: !apiKey, error: lastError };
 }

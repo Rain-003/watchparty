@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { HostGrant } from '../types';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -12,6 +13,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Zap,
+  UserPlus,
+  Copy,
+  Check,
+  Trash2,
 } from 'lucide-react';
 
 interface OwnerAdminModalProps {
@@ -25,6 +30,7 @@ interface AdminState {
   viewerPasscode: string;
   hostEpoch: number;
   lockdown: boolean;
+  hostGrants?: HostGrant[];
   supabaseConnected?: boolean;
 }
 
@@ -40,6 +46,9 @@ export const OwnerAdminModal: React.FC<OwnerAdminModalProps> = ({ isOpen, onClos
   const [newViewerPasscode, setNewViewerPasscode] = useState('');
   const [isRevoking, setIsRevoking] = useState(false);
   const [isTogglingLock, setIsTogglingLock] = useState(false);
+  const [isGeneratingGrant, setIsGeneratingGrant] = useState(false);
+  const [newGrantCode, setNewGrantCode] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   // Fetch admin status on open
   useEffect(() => {
@@ -201,6 +210,81 @@ export const OwnerAdminModal: React.FC<OwnerAdminModalProps> = ({ isOpen, onClos
     }
   };
 
+  // 6. Generate 1-Time Host Grant Code & Link
+  const handleGenerateGrant = async () => {
+    setIsGeneratingGrant(true);
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'generate_host_grant' }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setNewGrantCode(data.grant.code);
+        setAdminState(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            hostGrants: [...(prev.hostGrants || []), data.grant],
+          };
+        });
+        showNotice(`🎟️ 1-Time Host Grant Code created: ${data.grant.code}`);
+      } else {
+        showNotice('Failed to generate host grant.', 'error');
+      }
+    } catch {
+      showNotice('Network error creating host grant.', 'error');
+    } finally {
+      setIsGeneratingGrant(false);
+    }
+  };
+
+  // 7. Revoke an Individual Host Grant / Device
+  const handleRevokeGrant = async (grantId: string) => {
+    if (!window.confirm('Revoke this host device authorization? They will immediately lose host access.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'revoke_host_grant', grantId }),
+      });
+
+      if (res.ok) {
+        setAdminState(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            hostGrants: (prev.hostGrants || []).map(g => g.id === grantId ? { ...g, revoked: true } : g),
+          };
+        });
+        showNotice('🚫 Host device access revoked.');
+      } else {
+        showNotice('Failed to revoke host grant.', 'error');
+      }
+    } catch {
+      showNotice('Network error revoking host grant.', 'error');
+    }
+  };
+
+  // Copy grant invite link or code to clipboard
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCode(label);
+    setTimeout(() => setCopiedCode(null), 2500);
+    showNotice(`Copied to clipboard: ${label}`);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -341,6 +425,118 @@ export const OwnerAdminModal: React.FC<OwnerAdminModalProps> = ({ isOpen, onClos
                 </p>
               </button>
             </div>
+          </div>
+
+          {/* Section: 1-Time Host Device Grants */}
+          <div className="space-y-3 pt-3 border-t border-zinc-800/80">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                  <UserPlus className="w-3.5 h-3.5" />
+                  1-Time Host Device Grants
+                </h3>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Grant a co-host permanent access. When they claim it on their device, they stay authorized forever.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGenerateGrant}
+                disabled={isGeneratingGrant}
+                className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-medium transition-colors shrink-0 flex items-center gap-1.5 self-start sm:self-auto disabled:opacity-50"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                {isGeneratingGrant ? 'Creating...' : '+ Generate 1-Time Link'}
+              </button>
+            </div>
+
+            {/* If a new grant was just generated, show full share link & code */}
+            {newGrantCode && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-amber-200">
+                    🎟️ Single-Use Host Invite Link Ready:
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                    Single-Use
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/?grant=${newGrantCode}`}
+                    className="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs font-mono text-amber-300 select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(`${window.location.origin}/?grant=${newGrantCode}`, 'Invite Link')}
+                    className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-zinc-950 font-semibold text-xs rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    {copiedCode === 'Invite Link' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode === 'Invite Link' ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-400">
+                  Send this link to your trusted co-host. Once opened, their device is permanently authorized as a Host!
+                </p>
+              </div>
+            )}
+
+            {/* List of active / past grants */}
+            {adminState?.hostGrants && adminState.hostGrants.length > 0 && (
+              <div className="space-y-1.5 mt-2 max-h-36 overflow-y-auto pr-1">
+                {adminState.hostGrants.map((grant) => (
+                  <div
+                    key={grant.id}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-mono transition-colors ${
+                      grant.revoked
+                        ? 'bg-zinc-900/40 border-zinc-900 text-zinc-600 line-through'
+                        : grant.claimed
+                        ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-300'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{grant.code}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-sans ${
+                        grant.revoked
+                          ? 'bg-zinc-800 text-zinc-500'
+                          : grant.claimed
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-amber-500/20 text-amber-300'
+                      }`}>
+                        {grant.revoked ? 'Revoked' : grant.claimed ? 'Claimed (Active Device)' : 'Ready to Claim'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {!grant.claimed && !grant.revoked && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(`${window.location.origin}/?grant=${grant.code}`, grant.code)}
+                          className="text-zinc-400 hover:text-zinc-200 p-1"
+                          title="Copy Link"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {!grant.revoked && (
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeGrant(grant.id)}
+                          className="text-red-400 hover:text-red-300 p-1 transition-colors"
+                          title="Revoke Host Access"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Section 2: 2FA Email & Recovery Settings */}

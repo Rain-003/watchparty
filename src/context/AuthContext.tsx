@@ -18,6 +18,7 @@ interface LoginResult {
   requiresOtp?: boolean;
   email?: string;
   devOtp?: string;
+  deliveryNotice?: string;
 }
 
 interface AuthContextType {
@@ -29,6 +30,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (code: string) => Promise<LoginResult>;
   verifyOtp: (otp: string) => Promise<{ success: boolean; error?: string }>;
+  claimHostGrant: (grantCode: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   settings: StreamSettings;
   updateSettings: (newSettings: Partial<StreamSettings>) => Promise<void>;
@@ -52,9 +54,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return base;
   });
 
-  // Verify cryptographic session token on initial mount
+  // Verify cryptographic session token on initial mount & claim host invites
   useEffect(() => {
-    const verifyStoredSession = async () => {
+    const initSession = async () => {
+      // 1. Check if URL contains a 1-time host grant invite
+      const urlParams = new URLSearchParams(window.location.search);
+      const hostGrantCode = urlParams.get('grant') || urlParams.get('claim_host');
+
+      if (hostGrantCode) {
+        try {
+          const grantRes = await fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'claim_host', grantCode: hostGrantCode.trim() }),
+          });
+
+          if (grantRes.ok) {
+            const data = await grantRes.json();
+            if (data.ok && data.token) {
+              localStorage.setItem(STORAGE_KEY_SESSION_TOKEN, data.token);
+              localStorage.setItem(STORAGE_KEY_AUTH_ROLE, 'host');
+              localStorage.removeItem(STORAGE_KEY_SUPER);
+              setUserRole('host');
+              setIsSuperAdmin(false);
+              setToken(data.token);
+              setIsLoading(false);
+
+              // Clean query parameters from URL without reloading
+              const cleanUrl = window.location.pathname;
+              window.history.replaceState({}, '', cleanUrl);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to claim host invite from URL:', err);
+        }
+      }
+
+      // 2. Normal stored session verification
       const savedToken = localStorage.getItem(STORAGE_KEY_SESSION_TOKEN);
 
       if (!savedToken) {
@@ -104,8 +141,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     };
 
-    verifyStoredSession();
+    initSession();
   }, []);
+
+  const claimHostGrant = async (grantCode: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'claim_host', grantCode: grantCode.trim() }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok && data.token) {
+        localStorage.setItem(STORAGE_KEY_SESSION_TOKEN, data.token);
+        localStorage.setItem(STORAGE_KEY_AUTH_ROLE, 'host');
+        localStorage.removeItem(STORAGE_KEY_SUPER);
+        setUserRole('host');
+        setIsSuperAdmin(false);
+        setToken(data.token);
+        return { success: true };
+      }
+      return { success: false, error: data.message || data.error || 'Failed to claim host grant' };
+    } catch {
+      return { success: false, error: 'Network error claiming host grant' };
+    }
+  };
 
   const login = async (code: string): Promise<LoginResult> => {
     const trimmed = code.trim();
@@ -128,6 +189,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             requiresOtp: true,
             email: data.fullEmail || data.email,
             devOtp: data.devOtp,
+            deliveryNotice: data.deliveryNotice,
           };
         }
 
@@ -222,6 +284,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         verifyOtp,
+        claimHostGrant,
         logout,
         settings,
         updateSettings,

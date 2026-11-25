@@ -2,6 +2,15 @@ export type StreamSourceType = 'hls' | 'embed' | 'webrtc';
 
 export type UserRole = 'viewer' | 'host';
 
+export interface HostGrant {
+  id: string;
+  code: string;
+  createdAt: number;
+  claimed: boolean;
+  claimedAt?: number;
+  revoked?: boolean;
+}
+
 export interface StreamSettings {
   title: string;
   viewerPasscode: string;

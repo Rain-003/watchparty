@@ -6,6 +6,7 @@ export interface SessionPayload {
   isSuperAdmin: boolean;
   exp: number; // Unix timestamp in ms
   epoch?: number; // Invalidation epoch
+  hostId?: string; // Unique grant ID if granted via 1-time invite
 }
 
 function stringToUint8Array(str: string): Uint8Array {

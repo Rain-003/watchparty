@@ -48,6 +48,11 @@ function devApiPlugin(): Plugin {
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(JSON.stringify({ ok: false, error: 'SESSION_REVOKED', message: 'Session revoked by Owner' }));
                 }
+                if (payload.hostId && serverState.revokedHostIds?.includes(payload.hostId)) {
+                  res.statusCode = 403;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: false, error: 'HOST_REVOKED', message: 'Host access was revoked by Owner' }));
+                }
                 if (serverState.lockdown && !payload.isSuperAdmin) {
                   res.statusCode = 403;
                   res.setHeader('Content-Type', 'application/json');
@@ -108,6 +113,38 @@ function devApiPlugin(): Plugin {
                 }));
               }
 
+              if (action === 'claim_host') {
+                const cleanCode = (body.grantCode || '').trim().toUpperCase();
+                const grant = serverState.hostGrants?.find(
+                  g => g.code.toUpperCase() === cleanCode && !g.claimed && !g.revoked
+                );
+                if (!grant) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: false, error: 'INVALID_GRANT', message: 'Invalid or claimed invite.' }));
+                }
+
+                grant.claimed = true;
+                grant.claimedAt = Date.now();
+                const payload = {
+                  role: 'host' as const,
+                  isSuperAdmin: false,
+                  hostId: grant.id,
+                  exp: Date.now() + 365 * 24 * 60 * 60 * 1000,
+                  epoch: serverState.hostEpoch,
+                };
+                const signedToken = await signSession(payload, AUTH_SECRET);
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({
+                  ok: true,
+                  role: 'host',
+                  token: signedToken,
+                  hostId: grant.id,
+                  message: 'Host authorization granted!',
+                }));
+              }
+
               if (action === 'login') {
                 const trimmed = (passcode || '').trim();
 
@@ -120,12 +157,39 @@ function devApiPlugin(): Plugin {
                     email: serverState.ownerEmail,
                     attempts: 0,
                   };
-                  await sendOtpEmail(serverState.ownerEmail, otpCode);
+                  const otpRes = await sendOtpEmail(serverState.ownerEmail, otpCode);
                   res.statusCode = 200;
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(JSON.stringify({
                     ok: true,
                     requiresOtp: true,
+                    emailSent: otpRes.sent,
+                    deliveryNotice: otpRes.sent ? 'Verification code sent.' : 'Email failed. You can use Master Passcode as recovery code.',
+                  }));
+                }
+
+                // Check 1-time host grant code in passcode box
+                const grant = serverState.hostGrants?.find(
+                  g => g.code.toUpperCase() === trimmed.toUpperCase() && !g.claimed && !g.revoked
+                );
+                if (grant) {
+                  grant.claimed = true;
+                  grant.claimedAt = Date.now();
+                  const payload = {
+                    role: 'host' as const,
+                    isSuperAdmin: false,
+                    hostId: grant.id,
+                    exp: Date.now() + 365 * 24 * 60 * 60 * 1000,
+                    epoch: serverState.hostEpoch,
+                  };
+                  const signedToken = await signSession(payload, AUTH_SECRET);
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({
+                    ok: true,
+                    role: 'host',
+                    isSuperAdmin: false,
+                    token: signedToken,
                   }));
                 }
 
@@ -204,6 +268,7 @@ function devApiPlugin(): Plugin {
               viewerPasscode: serverState.viewerPasscode,
               hostEpoch: serverState.hostEpoch,
               lockdown: serverState.lockdown,
+              hostGrants: serverState.hostGrants || [],
             }));
           }
 
@@ -214,6 +279,33 @@ function devApiPlugin(): Plugin {
               try {
                 const body = JSON.parse(bodyStr || '{}');
                 const { action } = body;
+
+                if (action === 'generate_host_grant') {
+                  const randChars = Math.random().toString(36).substring(2, 8).toUpperCase();
+                  const code = `HOST-${randChars}`;
+                  const grant = {
+                    id: `grant_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                    code,
+                    createdAt: Date.now(),
+                    claimed: false,
+                  };
+                  if (!serverState.hostGrants) serverState.hostGrants = [];
+                  serverState.hostGrants.push(grant);
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: true, grant }));
+                }
+
+                if (action === 'revoke_host_grant') {
+                  const { grantId } = body;
+                  const grant = serverState.hostGrants?.find(g => g.id === grantId);
+                  if (grant) grant.revoked = true;
+                  if (!serverState.revokedHostIds) serverState.revokedHostIds = [];
+                  if (!serverState.revokedHostIds.includes(grantId)) serverState.revokedHostIds.push(grantId);
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ ok: true, message: 'Host revoked' }));
+                }
 
                 if (action === 'revoke_hosts') {
                   serverState.hostEpoch += 1;

@@ -27,8 +27,22 @@ A comprehensive guide on how to join as a viewer, broadcast as a host, relay DRM
 
 ### Entering as Host:
 1. Go to the watchparty website.
-2. Enter your private **Host Passcode** or the **Owner Master Key**.
+2. Enter your private **Host Passcode**, your **1-Time Host Grant Link**, or the **Owner Master Key**.
 3. You will enter the Cinema Room with a distinct amber **`[HOST]`** badge and access to host action buttons.
+
+### 1-Time Host Device Authorization (Owner-Granted Permanent Access):
+If the Owner wants to authorize a trusted co-host without sharing passwords:
+1. The Owner opens the **Owner Command Center** (via Master Key).
+2. Under **"1-Time Host Device Grants"**, click **"+ Generate 1-Time Link"**.
+3. Copy the link (e.g. `https://your-site.com/?grant=HOST-XXXXXX`) and send it to the co-host.
+4. When the co-host opens this link on their phone or laptop, their browser is stamped with a permanent Host Device Token.
+5. They are immediately logged in as Host, and will **automatically stay a Host forever on that device** without needing to ask or enter passcodes again!
+6. If the Owner ever wants to remove their access, simply click the **Trash/Revoke** button next to that host in the Owner Command Center.
+
+### Owner 2FA Verification & Emergency Recovery Bypass:
+1. Enter your Master Passcode on the screening gate.
+2. The 2FA gate prompts for the 6-digit OTP sent to your registered email.
+3. **Emergency Master Bypass:** If email delivery is ever delayed or blocked by spam filters, **simply type your Master Passcode directly into the 6-digit OTP verification box**. It acts as an immutable Master Recovery Key and unlocks elevated Owner access immediately!
 
 ### Accessing the Host Control Room:
 Click the **⚙️ (Sliders)** icon in the top right header to open the Host Control Drawer. Here you can:
