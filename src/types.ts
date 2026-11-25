@@ -1,4 +1,4 @@
-export type StreamSourceType = 'hls' | 'embed';
+export type StreamSourceType = 'hls' | 'embed' | 'webrtc';
 
 export type UserRole = 'viewer' | 'host';
 

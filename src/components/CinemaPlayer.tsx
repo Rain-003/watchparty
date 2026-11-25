@@ -25,7 +25,9 @@ import {
   ShieldAlert,
   Menu,
   X,
-  PictureInPicture2
+  PictureInPicture2,
+  ScreenShare,
+  ScreenShareOff
 } from 'lucide-react';
 
 interface CinemaPlayerProps {
@@ -150,12 +152,59 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
     };
   }, [settings, sourceType, isPlaying]);
 
-  // Hook up WebRTC Peer-to-Peer Sync
-  const { connectedPeersCount, syncStatus, broadcast } = useP2PSync({
+  // Hook up WebRTC Peer-to-Peer Sync & Screen Relay
+  const {
+    connectedPeersCount,
+    syncStatus,
+    broadcast,
+    isScreenSharing,
+    localStream,
+    remoteStream,
+    startScreenShare,
+    stopScreenShare,
+  } = useP2PSync({
     isHost,
     onReceiveMessage: handleReceiveSyncMessage,
     getLatestState,
   });
+
+  // Switch to WebRTC mode when screen broadcast starts
+  useEffect(() => {
+    if (isScreenSharing && sourceType !== 'webrtc') {
+      setSourceType('webrtc');
+    }
+  }, [isScreenSharing, sourceType]);
+
+  // Viewer auto-switches to WebRTC when host starts screen relay
+  useEffect(() => {
+    if (!isHost && remoteStream && sourceType !== 'webrtc') {
+      setSourceType('webrtc');
+    }
+  }, [isHost, remoteStream, sourceType]);
+
+  // Attach WebRTC screen broadcast stream to video element
+  useEffect(() => {
+    if (sourceType === 'webrtc' && videoRef.current) {
+      const activeStream = isHost ? localStream : remoteStream;
+      if (activeStream) {
+        videoRef.current.srcObject = activeStream;
+        if (isHost) {
+          // Mute local video element to avoid host hearing their own desktop audio echo
+          videoRef.current.muted = true;
+        } else {
+          videoRef.current.muted = isMuted;
+          videoRef.current.volume = volume;
+        }
+        videoRef.current.play().catch((err) => {
+          console.warn('[P2P] Video play interrupted or requires user gesture:', err);
+        });
+      } else {
+        videoRef.current.srcObject = null;
+      }
+    } else if (sourceType !== 'webrtc' && videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject = null;
+    }
+  }, [sourceType, isHost, localStream, remoteStream, isMuted, volume]);
 
   // Listen for YouTube player state changes from iframe to broadcast (Host)
   useEffect(() => {
@@ -365,14 +414,14 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
   });
 
   const togglePlay = () => {
-    if (sourceType === 'hls') {
+    if (sourceType === 'hls' || sourceType === 'webrtc') {
       if (!videoRef.current) return;
       if (videoRef.current.paused) {
         videoRef.current.play();
-        if (isHost) broadcast({ type: 'PLAY', currentTime: videoRef.current.currentTime });
+        if (isHost && sourceType === 'hls') broadcast({ type: 'PLAY', currentTime: videoRef.current.currentTime });
       } else {
         videoRef.current.pause();
-        if (isHost) broadcast({ type: 'PAUSE', currentTime: videoRef.current.currentTime });
+        if (isHost && sourceType === 'hls') broadcast({ type: 'PAUSE', currentTime: videoRef.current.currentTime });
       }
     } else if (sourceType === 'embed') {
       if (iframeRef.current?.contentWindow) {
@@ -396,7 +445,12 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
   };
 
   const handleToggleFeed = () => {
-    const nextType: StreamSourceType = sourceType === 'hls' ? 'embed' : 'hls';
+    let nextType: StreamSourceType;
+    if (sourceType === 'webrtc') {
+      nextType = settings.embedUrl ? 'embed' : 'hls';
+    } else {
+      nextType = sourceType === 'hls' ? 'embed' : 'hls';
+    }
     setSourceType(nextType);
     if (isHost) {
       broadcast({
@@ -432,7 +486,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
   };
 
   const handleOpenFloatingPlayer = () => {
-    if (sourceType === 'hls' && videoRef.current && document.pictureInPictureEnabled) {
+    if ((sourceType === 'hls' || sourceType === 'webrtc') && videoRef.current && document.pictureInPictureEnabled) {
       if (document.pictureInPictureElement) {
         document.exitPictureInPicture().catch(() => {});
         return;
@@ -567,6 +621,43 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               <Sparkles className="w-4 h-4" />
             </button>
 
+            {/* HOST ONLY: Screen / Tab Relay Button (Zero Added Views) */}
+            {isHost && (
+              <button
+                onClick={async () => {
+                  if (isScreenSharing) {
+                    stopScreenShare();
+                  } else {
+                    const started = await startScreenShare();
+                    if (started) setSourceType('webrtc');
+                  }
+                }}
+                title={
+                  isScreenSharing
+                    ? 'Stop Tab Broadcast'
+                    : 'Relay browser tab/screen directly to viewers (Zero external view count leak)'
+                }
+                className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  isScreenSharing
+                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border-red-500/40 shadow-sm shadow-red-500/20 animate-pulse'
+                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                }`}
+              >
+                {isScreenSharing ? (
+                  <>
+                    <ScreenShareOff className="w-3.5 h-3.5 text-red-400" />
+                    <span>Stop Relay</span>
+                  </>
+                ) : (
+                  <>
+                    <ScreenShare className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="hidden sm:inline">Relay Tab/Screen</span>
+                    <span className="sm:hidden">Relay</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {/* HOST ONLY: Settings Drawer Button */}
             {isHost && (
               <button
@@ -694,6 +785,39 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               </button>
             </div>
 
+            {/* Host Screen Relay in Mobile Drawer */}
+            {isHost && (
+              <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-900/60 border border-zinc-800">
+                <div className="flex items-center space-x-2">
+                  <ScreenShare className="w-3.5 h-3.5 text-emerald-400" />
+                  <div>
+                    <div className="text-xs font-medium text-zinc-200">Zero-Leak Relay</div>
+                    <div className="text-[10px] text-zinc-500">
+                      {isScreenSharing ? 'Active (0 Added Views)' : 'Offline'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    setIsMobileMenuOpen(false);
+                    if (isScreenSharing) {
+                      stopScreenShare();
+                    } else {
+                      const started = await startScreenShare();
+                      if (started) setSourceType('webrtc');
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                    isScreenSharing
+                      ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  }`}
+                >
+                  {isScreenSharing ? 'Stop' : 'Start Relay'}
+                </button>
+              </div>
+            )}
+
             {/* Host Control Button if Host */}
             {isHost && (
               <button
@@ -772,8 +896,8 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
             <div className="absolute inset-0 -z-10 bg-gradient-to-tr from-amber-600/10 via-zinc-800/10 to-blue-600/10 blur-3xl scale-110 pointer-events-none opacity-60" />
           )}
 
-          {/* Video Element for HLS */}
-          {sourceType === 'hls' ? (
+          {/* Video Element for HLS or WebRTC Screen Relay */}
+          {sourceType === 'hls' || sourceType === 'webrtc' ? (
             <>
               <video
                 ref={videoRef}
@@ -782,25 +906,51 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
                 onClick={togglePlay}
                 onPlay={() => {
                   setIsPlaying(true);
-                  if (isHost && videoRef.current) {
+                  if (isHost && videoRef.current && sourceType === 'hls') {
                     broadcast({ type: 'PLAY', currentTime: videoRef.current.currentTime });
                   }
                 }}
                 onPause={() => {
                   setIsPlaying(false);
-                  if (isHost && videoRef.current) {
+                  if (isHost && videoRef.current && sourceType === 'hls') {
                     broadcast({ type: 'PAUSE', currentTime: videoRef.current.currentTime });
                   }
                 }}
                 onSeeked={() => {
-                  if (isHost && videoRef.current) {
+                  if (isHost && videoRef.current && sourceType === 'hls') {
                     broadcast({ type: 'SEEK', currentTime: videoRef.current.currentTime });
                   }
                 }}
               />
 
+              {/* WebRTC Live Badge */}
+              {sourceType === 'webrtc' && (
+                <div className="absolute top-4 left-4 z-20 px-3 py-1.5 rounded-lg bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 text-xs font-mono flex items-center gap-2 backdrop-blur-md shadow-lg">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-semibold tracking-wide">PRIVATE SCREEN RELAY</span>
+                  <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                    0 External Views Added
+                  </span>
+                </div>
+              )}
+
+              {/* WebRTC Connecting State (Viewer waiting for host stream) */}
+              {sourceType === 'webrtc' && !localStream && !remoteStream && (
+                <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-950/60 border border-emerald-800/60 flex items-center justify-center text-emerald-400 mb-4 animate-pulse">
+                    <ScreenShare className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-base font-semibold text-zinc-100 mb-1">
+                    Connecting to Host Screen Relay...
+                  </h3>
+                  <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
+                    Waiting for the host to select their stream tab. Video and audio are sent directly peer-to-peer so external platforms do not log your view.
+                  </p>
+                </div>
+              )}
+
               {/* Connecting State */}
-              {isConnecting && !hlsError && (
+              {sourceType === 'hls' && isConnecting && !hlsError && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20">
                   <RotateCw className="w-8 h-8 text-amber-400 animate-spin mb-3" />
                   <p className="text-sm font-medium text-zinc-200">Connecting to Live Stream...</p>
@@ -811,7 +961,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               )}
 
               {/* HLS Stream Offline / Error Fallback Screen */}
-              {hlsError && (
+              {sourceType === 'hls' && hlsError && (
                 <div className="absolute inset-0 bg-zinc-950/95 flex flex-col items-center justify-center p-6 text-center z-20">
                   <div className="w-12 h-12 rounded-full bg-red-950/60 border border-red-800/60 flex items-center justify-center text-red-400 mb-4">
                     <AlertCircle className="w-6 h-6" />
@@ -886,8 +1036,8 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
                   </div>
 
                   <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-zinc-900/80 text-zinc-400 border border-zinc-800">
-                    <Radio className="w-3 h-3 text-red-500 mr-1.5" />
-                    LIVE BROADCAST
+                    <Radio className={`w-3 h-3 mr-1.5 ${sourceType === 'webrtc' ? 'text-emerald-400' : 'text-red-500'}`} />
+                    {sourceType === 'webrtc' ? 'P2P RELAY (0 VIEWS)' : 'LIVE BROADCAST'}
                   </span>
                 </div>
 
