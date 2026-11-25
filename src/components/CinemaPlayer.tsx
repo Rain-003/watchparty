@@ -88,8 +88,15 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
       }
     } else if (msg.type === 'PLAY') {
       setIsPlaying(true);
-      if (sourceType === 'hls' && videoRef.current) {
-        videoRef.current.play().catch(() => {});
+      if ((sourceType === 'hls' || sourceType === 'webrtc') && videoRef.current) {
+        videoRef.current.play().catch(() => {
+          // If unmuted playback is blocked in background tab, fallback to muted so it keeps playing
+          if (!isHost && videoRef.current) {
+            videoRef.current.muted = true;
+            setIsMuted(true);
+            videoRef.current.play().catch(() => {});
+          }
+        });
       } else if (sourceType === 'embed' && iframeRef.current?.contentWindow) {
         iframeRef.current.contentWindow.postMessage(
           JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
@@ -98,7 +105,7 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
       }
     } else if (msg.type === 'PAUSE') {
       setIsPlaying(false);
-      if (sourceType === 'hls' && videoRef.current) {
+      if ((sourceType === 'hls' || sourceType === 'webrtc') && videoRef.current) {
         videoRef.current.pause();
       } else if (sourceType === 'embed' && iframeRef.current?.contentWindow) {
         iframeRef.current.contentWindow.postMessage(
@@ -197,6 +204,13 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
         }
         videoRef.current.play().catch((err) => {
           console.warn('[P2P] Video play interrupted or requires user gesture:', err);
+          // Background/Unfocused Tab Fallback: Browsers block unmuted autoplay on inactive tabs.
+          // Fall back to muted so video decodes & renders in background immediately!
+          if (!isHost && videoRef.current) {
+            videoRef.current.muted = true;
+            setIsMuted(true);
+            videoRef.current.play().catch((e) => console.warn('[P2P] Muted autoplay also blocked:', e));
+          }
         });
       } else {
         videoRef.current.srcObject = null;
@@ -205,6 +219,37 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
       videoRef.current.srcObject = null;
     }
   }, [sourceType, isHost, localStream, remoteStream, isMuted, volume]);
+
+  // Auto-resume playback whenever the viewer's tab regains focus or visibility
+  useEffect(() => {
+    const handleFocusResume = () => {
+      if (sourceType === 'hls' || sourceType === 'webrtc') {
+        if (videoRef.current && videoRef.current.paused) {
+          videoRef.current.play().catch(() => {});
+        }
+      } else if (sourceType === 'embed') {
+        if (iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+            '*'
+          );
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleFocusResume();
+      }
+    };
+
+    window.addEventListener('focus', handleFocusResume);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', handleFocusResume);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [sourceType]);
 
   // Listen for YouTube player state changes from iframe to broadcast (Host)
   useEffect(() => {
@@ -902,7 +947,9 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               <video
                 ref={videoRef}
                 className="w-full h-full object-contain cursor-pointer"
+                autoPlay
                 playsInline
+                muted={isHost && sourceType === 'webrtc' ? true : isMuted}
                 onClick={togglePlay}
                 onPlay={() => {
                   setIsPlaying(true);
