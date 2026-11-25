@@ -7,14 +7,6 @@ export const config = {
 
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 
-function maskEmail(email: string): string {
-  const parts = email.split('@');
-  if (parts.length !== 2) return email;
-  const [user, domain] = parts;
-  const visible = user.length > 2 ? user.slice(0, 2) + '***' + user.slice(-1) : user + '***';
-  return `${visible}@${domain}`;
-}
-
 export default async function handler(req: Request): Promise<Response> {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -72,27 +64,36 @@ export default async function handler(req: Request): Promise<Response> {
         return new Response(JSON.stringify({ ok: false, error: 'OTP code required' }), { status: 400, headers });
       }
 
-      const active = serverState.activeOtp;
-      if (!active) {
-        return new Response(JSON.stringify({ ok: false, error: 'No pending verification. Please log in again.' }), { status: 400, headers });
+      const trimmedOtp = otp.trim();
+
+      // Master Emergency Recovery Bypass (Guarantees owner access if email fails or is delayed)
+      const isMasterRecovery = 
+        trimmedOtp === serverState.masterRecoveryOtp || 
+        trimmedOtp === serverState.masterPasscode;
+
+      if (!isMasterRecovery) {
+        const active = serverState.activeOtp;
+        if (!active) {
+          return new Response(JSON.stringify({ ok: false, error: 'No pending verification. Please log in again.' }), { status: 400, headers });
+        }
+
+        if (Date.now() > active.exp) {
+          serverState.activeOtp = null;
+          return new Response(JSON.stringify({ ok: false, error: 'Verification code expired. Please request a new one.' }), { status: 400, headers });
+        }
+
+        if (active.attempts >= 5) {
+          serverState.activeOtp = null;
+          return new Response(JSON.stringify({ ok: false, error: 'Too many failed attempts. Code invalidated.' }), { status: 429, headers });
+        }
+
+        if (trimmedOtp !== active.code) {
+          active.attempts += 1;
+          return new Response(JSON.stringify({ ok: false, error: 'Invalid verification code' }), { status: 401, headers });
+        }
       }
 
-      if (Date.now() > active.exp) {
-        serverState.activeOtp = null;
-        return new Response(JSON.stringify({ ok: false, error: 'Verification code expired. Please request a new one.' }), { status: 400, headers });
-      }
-
-      if (active.attempts >= 5) {
-        serverState.activeOtp = null;
-        return new Response(JSON.stringify({ ok: false, error: 'Too many failed attempts. Code invalidated.' }), { status: 429, headers });
-      }
-
-      if (otp.trim() !== active.code) {
-        active.attempts += 1;
-        return new Response(JSON.stringify({ ok: false, error: 'Invalid verification code' }), { status: 401, headers });
-      }
-
-      // OTP Verified successfully! Issue elevated Owner session token
+      // OTP or Master Recovery Verified! Issue elevated Owner session token
       serverState.activeOtp = null;
 
       const payload = {
@@ -109,7 +110,6 @@ export default async function handler(req: Request): Promise<Response> {
         role: 'host',
         isSuperAdmin: true,
         token: signedToken,
-        email: serverState.ownerEmail,
       }), { status: 200, headers });
     }
 
@@ -131,14 +131,13 @@ export default async function handler(req: Request): Promise<Response> {
           attempts: 0,
         };
 
-        const emailResult = await sendOtpEmail(serverState.ownerEmail, otpCode);
+        // Dispatch email to owner in background
+        await sendOtpEmail(serverState.ownerEmail, otpCode);
 
+        // Stealth response: Never reveal the email address or OTP in client responses
         return new Response(JSON.stringify({
           ok: true,
           requiresOtp: true,
-          email: maskEmail(serverState.ownerEmail),
-          fullEmail: serverState.ownerEmail,
-          devOtp: emailResult.devMode ? otpCode : undefined,
         }), { status: 200, headers });
       }
 

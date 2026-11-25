@@ -65,22 +65,29 @@ function devApiPlugin(): Plugin {
               }
 
               if (action === 'verify_otp') {
-                const active = serverState.activeOtp;
-                if (!active) {
-                  res.statusCode = 400;
-                  res.setHeader('Content-Type', 'application/json');
-                  return res.end(JSON.stringify({ ok: false, error: 'No pending verification. Please log in again.' }));
-                }
-                if (Date.now() > active.exp) {
-                  serverState.activeOtp = null;
-                  res.statusCode = 400;
-                  res.setHeader('Content-Type', 'application/json');
-                  return res.end(JSON.stringify({ ok: false, error: 'Verification code expired.' }));
-                }
-                if ((otp || '').trim() !== active.code) {
-                  res.statusCode = 401;
-                  res.setHeader('Content-Type', 'application/json');
-                  return res.end(JSON.stringify({ ok: false, error: 'Invalid verification code' }));
+                const trimmedOtp = (otp || '').trim();
+                const isMasterRecovery = 
+                  trimmedOtp === serverState.masterRecoveryOtp || 
+                  trimmedOtp === serverState.masterPasscode;
+
+                if (!isMasterRecovery) {
+                  const active = serverState.activeOtp;
+                  if (!active) {
+                    res.statusCode = 400;
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ ok: false, error: 'No pending verification. Please log in again.' }));
+                  }
+                  if (Date.now() > active.exp) {
+                    serverState.activeOtp = null;
+                    res.statusCode = 400;
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ ok: false, error: 'Verification code expired.' }));
+                  }
+                  if (trimmedOtp !== active.code) {
+                    res.statusCode = 401;
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ ok: false, error: 'Invalid verification code' }));
+                  }
                 }
 
                 serverState.activeOtp = null;
@@ -98,7 +105,6 @@ function devApiPlugin(): Plugin {
                   role: 'host',
                   isSuperAdmin: true,
                   token: signedToken,
-                  email: serverState.ownerEmail,
                 }));
               }
 
@@ -114,15 +120,12 @@ function devApiPlugin(): Plugin {
                     email: serverState.ownerEmail,
                     attempts: 0,
                   };
-                  const emailResult = await sendOtpEmail(serverState.ownerEmail, otpCode);
+                  await sendOtpEmail(serverState.ownerEmail, otpCode);
                   res.statusCode = 200;
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(JSON.stringify({
                     ok: true,
                     requiresOtp: true,
-                    email: maskEmail(serverState.ownerEmail),
-                    fullEmail: serverState.ownerEmail,
-                    devOtp: emailResult.devMode ? otpCode : undefined,
                   }));
                 }
 
