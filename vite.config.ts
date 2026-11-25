@@ -272,7 +272,13 @@ function devApiPlugin(): Plugin {
             }
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
-            return res.end(JSON.stringify(devRoomState));
+            const respData: Record<string, unknown> = { ...devRoomState };
+            const authHeader = req.headers['authorization'];
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+              respData.viewerPasscode = serverState.viewerPasscode;
+              respData.hostPasscode = serverState.hostPasscode;
+            }
+            return res.end(JSON.stringify(respData));
           }
 
           if (req.method === 'POST') {
@@ -310,6 +316,8 @@ function devApiPlugin(): Plugin {
               try {
                 const body = JSON.parse(bodyStr || '{}');
                 devRoomState = { ...body };
+                if (body.viewerPasscode) serverState.viewerPasscode = body.viewerPasscode.trim();
+                if (body.hostPasscode) serverState.hostPasscode = body.hostPasscode.trim();
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({ ok: true }));

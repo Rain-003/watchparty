@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { X, Check, RefreshCw, Key, Link2, Tv, MessageSquare, Shield, Wand2, Copy, Share2 } from 'lucide-react';
 import { formatEmbedUrl, buildShareableLink } from '../utils/urlHelper';
+import { fetchStreamFromCloud } from '../services/cloudSync';
 
 interface StreamSettingsModalProps {
   isOpen: boolean;
@@ -9,7 +10,7 @@ interface StreamSettingsModalProps {
 }
 
 export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen, onClose }) => {
-  const { settings, updateSettings, resetSettings, isSuperAdmin } = useAuth();
+  const { settings, updateSettings, resetSettings, isSuperAdmin, token } = useAuth();
 
   const [formData, setFormData] = useState({
     title: settings.title,
@@ -21,6 +22,28 @@ export const StreamSettingsModal: React.FC<StreamSettingsModalProps> = ({ isOpen
     autoPlay: settings.autoPlay,
     ambientGlow: settings.ambientGlow,
   });
+
+  // Pre-load live passcodes and room details from Supabase when opening modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const loadLiveSettings = async () => {
+      const liveData = await fetchStreamFromCloud(token);
+      if (liveData) {
+        setFormData(prev => ({
+          ...prev,
+          title: liveData.title || prev.title,
+          hlsUrl: liveData.hlsUrl || prev.hlsUrl,
+          embedUrl: liveData.embedUrl || prev.embedUrl,
+          discordUrl: liveData.discordUrl !== undefined ? (liveData.discordUrl || '') : prev.discordUrl,
+          viewerPasscode: (liveData as any).viewerPasscode || prev.viewerPasscode,
+          hostPasscode: (liveData as any).hostPasscode || prev.hostPasscode,
+        }));
+      }
+    };
+
+    loadLiveSettings();
+  }, [isOpen, token]);
 
   const [savedNotice, setSavedNotice] = useState(false);
   const [isSaving, setIsSaving] = useState(false);

@@ -1,6 +1,6 @@
 import { verifySession } from './cryptoHelper';
 import { serverState, AUTH_SECRET } from './serverState';
-import { fetchRoomFromDb, updateRoomInDb } from './supabaseServer';
+import { fetchRoomFromDb, updateRoomInDb, fetchSecurityFromDb, updateSecurityInDb } from './supabaseServer';
 
 export const config = {
   runtime: 'edge',
@@ -51,9 +51,9 @@ export default async function handler(req: Request): Promise<Response> {
 
     try {
       const body = await req.json();
-      const { title, hlsUrl, embedUrl, discordUrl, autoPlay, ambientGlow } = body;
+      const { title, hlsUrl, embedUrl, discordUrl, autoPlay, ambientGlow, viewerPasscode, hostPasscode } = body;
 
-      // Update Supabase Database
+      // 1. Update Supabase Room Configuration
       await updateRoomInDb({
         title,
         primary_hls_url: hlsUrl,
@@ -63,8 +63,35 @@ export default async function handler(req: Request): Promise<Response> {
         ambient_glow: ambientGlow,
       });
 
+      // 2. If Host updated passcodes, save to Supabase party_security
+      const secUpdates: Record<string, string> = {};
+      if (viewerPasscode && typeof viewerPasscode === 'string') {
+        const vp = viewerPasscode.trim();
+        secUpdates.viewer_passcode = vp;
+        serverState.viewerPasscode = vp;
+      }
+      if (hostPasscode && typeof hostPasscode === 'string') {
+        const hp = hostPasscode.trim();
+        secUpdates.host_passcode = hp;
+        serverState.hostPasscode = hp;
+      }
+
+      if (Object.keys(secUpdates).length > 0) {
+        await updateSecurityInDb(secUpdates);
+      }
+
       // Update in-memory fallback
-      fallbackRoomState = { title, hlsUrl, embedUrl, discordUrl, autoPlay, ambientGlow, updatedAt: Date.now() };
+      fallbackRoomState = {
+        title,
+        hlsUrl,
+        embedUrl,
+        discordUrl,
+        autoPlay,
+        ambientGlow,
+        viewerPasscode,
+        hostPasscode,
+        updatedAt: Date.now(),
+      };
 
       return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
     } catch {
@@ -72,13 +99,26 @@ export default async function handler(req: Request): Promise<Response> {
     }
   }
 
-  // GET - return current room state to viewers
+  // GET - return current room state
   if (isLockedDown) {
     return new Response(JSON.stringify({ lockdown: true, title: 'Screening Room Locked (Maintenance)' }), { status: 200, headers });
   }
 
+  // Check if caller is authenticated Host (to safely include live passcodes)
+  let includePasscodes = false;
+  let dbSec = null;
+  const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const payload = await verifySession(token, AUTH_SECRET);
+    if (payload && payload.role === 'host') {
+      includePasscodes = true;
+      dbSec = await fetchSecurityFromDb();
+    }
+  }
+
   if (dbRoom) {
-    return new Response(JSON.stringify({
+    const responseData: Record<string, unknown> = {
       title: dbRoom.title,
       hlsUrl: dbRoom.primary_hls_url,
       embedUrl: dbRoom.backup_embed_url,
@@ -86,7 +126,14 @@ export default async function handler(req: Request): Promise<Response> {
       autoPlay: dbRoom.auto_play,
       ambientGlow: dbRoom.ambient_glow,
       lockdown: dbRoom.is_locked_down,
-    }), { status: 200, headers });
+    };
+
+    if (includePasscodes) {
+      responseData.viewerPasscode = dbSec?.viewer_passcode || serverState.viewerPasscode;
+      responseData.hostPasscode = dbSec?.host_passcode || serverState.hostPasscode;
+    }
+
+    return new Response(JSON.stringify(responseData), { status: 200, headers });
   }
 
   return new Response(JSON.stringify(fallbackRoomState), { status: 200, headers });
