@@ -761,111 +761,111 @@ export const CinemaPlayer: React.FC<CinemaPlayerProps> = ({ onOpenSettings, onOp
               </div>
             )}
 
-            {/* Feed Switcher Button */}
-            <button
-              onClick={handleToggleFeed}
-              title="Switch between Direct HLS Feed and Backup Embed"
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors"
-            >
-              <Layers className="w-3.5 h-3.5 text-amber-400" />
-              <span>Feed:</span>
-              <span className="font-mono text-amber-400 uppercase">{sourceType}</span>
-            </button>
-
-            {/* Discord Link */}
-            {settings.discordUrl && (
-              <a
-                href={settings.discordUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#5865F2]/10 hover:bg-[#5865F2]/20 text-[#7983f5] border border-[#5865F2]/30 transition-colors"
-              >
-                <span>Discord</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
-
-            {/* Ambient Glow Toggle */}
-            <button
-              onClick={() => setAmbientGlow(!ambientGlow)}
-              title="Toggle Ambient Theater Glow"
-              className={`p-2 rounded-lg text-xs border transition-colors ${
-                ambientGlow
-                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-            </button>
-
-            {/* Floating Mini-Player (Picture-in-Picture) */}
-            <button
-              onClick={handleOpenFloatingPlayer}
-              title="Float stream over Discord and games (Picture-in-Picture)"
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-amber-300 hover:text-amber-200 border border-zinc-800 hover:border-amber-500/30 transition-all shadow-sm"
-            >
-              <PictureInPicture2 className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Mini-Player</span>
-            </button>
-
-            {/* HOST ONLY: Screen / Tab Relay Button (Zero Added Views) */}
-            {isHost && (
+            {/* UNIFIED CINEMA TOOLS CAPSULE (Viewer Experience) */}
+            <div className="flex items-center bg-zinc-900/90 border border-zinc-800/90 rounded-xl p-1 gap-1 shadow-inner">
+              {/* Ambient Glow Toggle */}
               <button
-                onClick={async () => {
-                  if (isScreenSharing) {
-                    stopScreenShare();
-                  } else {
-                    const started = await startScreenShare();
-                    if (started) setSourceType('webrtc');
-                  }
-                }}
-                title={
-                  isScreenSharing
-                    ? 'Stop Tab Broadcast'
-                    : 'Relay browser tab/screen directly to viewers (Zero external view count leak)'
-                }
-                className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                  isScreenSharing
-                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border-red-500/40 shadow-sm shadow-red-500/20 animate-pulse'
-                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                onClick={() => setAmbientGlow(!ambientGlow)}
+                title="Toggle Ambient Theater Lighting"
+                className={`p-1.5 rounded-lg text-xs transition-all ${
+                  ambientGlow
+                    ? 'bg-amber-500/20 text-amber-300 shadow-sm shadow-amber-500/20'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
                 }`}
               >
-                {isScreenSharing ? (
-                  <>
-                    <ScreenShareOff className="w-3.5 h-3.5 text-red-400" />
-                    <span>Stop Relay</span>
-                  </>
-                ) : (
-                  <>
-                    <ScreenShare className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="hidden sm:inline">Relay Tab/Screen</span>
-                    <span className="sm:hidden">Relay</span>
-                  </>
-                )}
+                <Sparkles className="w-4 h-4" />
               </button>
-            )}
 
-            {/* HOST ONLY: Settings Drawer Button */}
+              {/* Floating Mini-Player (PiP) */}
+              <button
+                onClick={handleOpenFloatingPlayer}
+                title="Float Mini-Player (Picture-in-Picture)"
+                className="p-1.5 rounded-lg text-xs text-zinc-400 hover:text-amber-300 hover:bg-zinc-800/60 transition-all"
+              >
+                <PictureInPicture2 className="w-4 h-4" />
+              </button>
+
+              {/* Feed Switcher (Compact Pill) */}
+              <button
+                onClick={handleToggleFeed}
+                title="Click to toggle Feed (HLS / EMBED)"
+                className="px-2 py-1 rounded-lg text-[11px] font-mono font-semibold text-zinc-300 hover:text-amber-300 hover:bg-zinc-800/60 transition-colors flex items-center gap-1 border border-zinc-800/80"
+              >
+                <Layers className="w-3 h-3 text-amber-400" />
+                <span>{sourceType.toUpperCase()}</span>
+              </button>
+
+              {/* Discord Link */}
+              {settings.discordUrl && (
+                <a
+                  href={settings.discordUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Open Community Discord Voice & Chat"
+                  className="p-1.5 rounded-lg text-xs text-[#7983f5] hover:bg-[#5865F2]/20 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+            </div>
+
+            {/* HOST & ADMIN ACTION CLUSTER */}
             {isHost && (
-              <button
-                onClick={onOpenSettings}
-                title="Host Stream Settings"
-                className="p-2 rounded-lg text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors"
-              >
-                <Sliders className="w-4 h-4" />
-              </button>
-            )}
+              <div className="flex items-center space-x-1.5 pl-1 border-l border-zinc-800/80">
+                {/* Screen / Tab Relay Button */}
+                <button
+                  onClick={async () => {
+                    if (isScreenSharing) {
+                      stopScreenShare();
+                    } else {
+                      const started = await startScreenShare();
+                      if (started) setSourceType('webrtc');
+                    }
+                  }}
+                  title={
+                    isScreenSharing
+                      ? 'Stop Tab Broadcast'
+                      : 'Relay browser tab/screen directly to viewers (Zero external view count leak)'
+                  }
+                  className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                    isScreenSharing
+                      ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border-red-500/40 shadow-sm shadow-red-500/20 animate-pulse'
+                      : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  }`}
+                >
+                  {isScreenSharing ? (
+                    <>
+                      <ScreenShareOff className="w-3.5 h-3.5 text-red-400" />
+                      <span>Stop Relay</span>
+                    </>
+                  ) : (
+                    <>
+                      <ScreenShare className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Relay Tab</span>
+                    </>
+                  )}
+                </button>
 
-            {/* OWNER ONLY: Admin Command Center */}
-            {isSuperAdmin && (
-              <button
-                onClick={onOpenOwnerAdmin}
-                title="Owner Command Center & Breach Mitigation"
-                className="px-2.5 py-1.5 rounded-lg text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/20 transition-all flex items-center space-x-1.5 font-medium"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden lg:inline text-[11px] font-mono font-semibold">OWNER ADMIN</span>
-              </button>
+                {/* Host Settings */}
+                <button
+                  onClick={onOpenSettings}
+                  title="Host Stream Settings"
+                  className="p-2 rounded-xl text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors"
+                >
+                  <Sliders className="w-4 h-4" />
+                </button>
+
+                {/* Owner Command Center */}
+                {isSuperAdmin && (
+                  <button
+                    onClick={onOpenOwnerAdmin}
+                    title="Owner Command Center & Breach Mitigation"
+                    className="p-2 rounded-xl text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/20 transition-all"
+                  >
+                    <ShieldAlert className="w-4 h-4 text-amber-400" />
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Exit / Logout */}
